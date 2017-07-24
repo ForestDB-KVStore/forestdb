@@ -27,7 +27,7 @@ SET(FORESTDB_COMMON_CORE_SRC
     ${PROJECT_SOURCE_DIR}/src/iterator.cc
     ${PROJECT_SOURCE_DIR}/src/kv_instance.cc
     ${PROJECT_SOURCE_DIR}/src/list.cc
-	${PROJECT_SOURCE_DIR}/src/log_message.cc
+    ${PROJECT_SOURCE_DIR}/src/log_message.cc
     ${PROJECT_SOURCE_DIR}/src/staleblock.cc
     ${PROJECT_SOURCE_DIR}/src/superblock.cc
     ${PROJECT_SOURCE_DIR}/src/transaction.cc
