@@ -96,7 +96,8 @@ size_t _fdb_readkey_wrap(void *handle, uint64_t offset, void *buf)
             "offset %" _F64 " in a database file '%s' "
             ": FDB status %d, lastbid 0x%" _X64 ", "
             "curblock 0x%" _X64 ", curpos 0x%x\n";
-        fdb_log(NULL, FDB_RESULT_READ_FAIL, msg, offset,
+        fdb_log(NULL, FDB_LOG_ERROR, FDB_RESULT_READ_FAIL,
+                msg, offset,
                 dhandle->file->filename, fs, dhandle->lastbid,
                 dhandle->curblock, dhandle->curpos);
         dbg_print_buf(dhandle->readbuffer, dhandle->file->blocksize, true, 16);
@@ -577,7 +578,7 @@ INLINE fdb_status _fdb_recover_compaction(fdb_kvs_handle *handle,
     fdb_status status = _fdb_open(&new_db, new_filename,
                                   FDB_AFILENAME, &config);
     if (status != FDB_RESULT_SUCCESS) {
-        return fdb_log(&handle->log_callback, status,
+        return fdb_log(&handle->log_callback, FDB_LOG_ERROR, status,
                        "Error in opening a partially compacted file '%s' for recovery.",
                        new_filename);
     }
@@ -1034,7 +1035,7 @@ fdb_snapshot_open_start:
             clone_snapshot = true;
             handle->max_seqnum = FDB_SNAPSHOT_INMEM; // temp value to skip WAL
         } else {
-            fdb_log(&handle_in->log_callback, fs,
+            fdb_log(&handle_in->log_callback, FDB_LOG_ERROR, fs,
                     "Warning: Snapshot clone at sequence number %" _F64
                     "does not match its snapshot handle %" _F64
                     "in file '%s'.", seqnum, handle_in->seqnum,
@@ -1207,7 +1208,8 @@ fdb_status fdb_rollback(fdb_kvs_handle **handle_ptr, fdb_seqnum_t seqnum)
     }
 
     if (handle_in->config.flags & FDB_OPEN_FLAG_RDONLY) {
-        return fdb_log(&handle_in->log_callback, FDB_RESULT_RONLY_VIOLATION,
+        return fdb_log(&handle_in->log_callback, FDB_LOG_WARNING,
+                       FDB_RESULT_RONLY_VIOLATION,
                        "Warning: Rollback is not allowed on the read-only DB file '%s'.",
                        handle_in->file->filename);
     }
@@ -1349,7 +1351,8 @@ fdb_status fdb_rollback_all(fdb_file_handle *fhandle,
     log_callback = super_handle->log_callback;
 
     if (super_handle->config.flags & FDB_OPEN_FLAG_RDONLY) {
-        return fdb_log(&super_handle->log_callback, FDB_RESULT_RONLY_VIOLATION,
+        return fdb_log(&super_handle->log_callback, FDB_LOG_WARNING,
+                       FDB_RESULT_RONLY_VIOLATION,
                        "Warning: Rollback is not allowed on the read-only DB file '%s'.",
                        super_handle->file->filename);
     }
@@ -1583,7 +1586,8 @@ fdb_status _fdb_clone_snapshot(fdb_kvs_handle *handle_in,
     if (status != FDB_RESULT_SUCCESS) {
         const char *msg = "Snapshot clone operation fails due to the errors in "
             "btreeblk_end() in a database file '%s'\n";
-        fdb_log(&handle_in->log_callback, status, msg, handle_in->file->filename);
+        fdb_log(&handle_in->log_callback, FDB_LOG_ERROR, status,
+                msg, handle_in->file->filename);
     }
 
     return status;
@@ -2103,8 +2107,8 @@ fdb_status _fdb_open(fdb_kvs_handle *handle,
     if (!handle->op_stats) {
         const char *msg = "Database open fails due to the error in retrieving "
             "the global operational stats of KV store in a database file '%s'\n";
-        fdb_log(&handle->log_callback, FDB_RESULT_OPEN_FAIL, msg,
-                handle->file->filename);
+        fdb_log(&handle->log_callback, FDB_LOG_ERROR, FDB_RESULT_OPEN_FAIL,
+                msg, handle->file->filename);
         return FDB_RESULT_OPEN_FAIL;
     }
 
@@ -3698,7 +3702,8 @@ fdb_status fdb_set(fdb_kvs_handle *handle, fdb_doc *doc)
     LATENCY_STAT_START();
 
     if (handle->config.flags & FDB_OPEN_FLAG_RDONLY) {
-        return fdb_log(&handle->log_callback, FDB_RESULT_RONLY_VIOLATION,
+        return fdb_log(&handle->log_callback, FDB_LOG_WARNING,
+                       FDB_RESULT_RONLY_VIOLATION,
                        "Warning: SET is not allowed on the read-only DB file '%s'.",
                        handle->file->filename);
     }
@@ -3949,7 +3954,8 @@ fdb_status fdb_del(fdb_kvs_handle *handle, fdb_doc *doc)
     }
 
     if (handle->config.flags & FDB_OPEN_FLAG_RDONLY) {
-        return fdb_log(&handle->log_callback, FDB_RESULT_RONLY_VIOLATION,
+        return fdb_log(&handle->log_callback, FDB_LOG_WARNING,
+                       FDB_RESULT_RONLY_VIOLATION,
                        "Warning: DEL is not allowed on the read-only DB file '%s'.",
                        handle->file->filename);
     }
@@ -4231,7 +4237,8 @@ fdb_status _fdb_commit(fdb_kvs_handle *handle,
         }
     }
     if (handle->config.flags & FDB_OPEN_FLAG_RDONLY) {
-        return fdb_log(&handle->log_callback, FDB_RESULT_RONLY_VIOLATION,
+        return fdb_log(&handle->log_callback, FDB_LOG_WARNING,
+                       FDB_RESULT_RONLY_VIOLATION,
                        "Warning: Commit is not allowed on the read-only DB file '%s'.",
                        handle->file->filename);
     }
@@ -6243,7 +6250,7 @@ static fdb_status _fdb_compact_move_delta(fdb_kvs_handle *handle,
                     // Invalid and corrupted header.
                     free(doc);
                     free(old_offset_array);
-                    fdb_log(log_callback, fs,
+                    fdb_log(log_callback, FDB_LOG_ERROR, fs,
                             "A commit header with block id (%" _F64 ") in the file '%s'"
                             " seems corrupted!",
                             offset / blocksize, handle->file->filename);
@@ -6309,7 +6316,7 @@ static fdb_status _fdb_compact_move_delta(fdb_kvs_handle *handle,
                 if (fs != FDB_RESULT_SUCCESS) {
                     free(doc);
                     free(old_offset_array);
-                    fdb_log(log_callback, fs,
+                    fdb_log(log_callback, FDB_LOG_ERROR, fs,
                             "Commit failure on a new file '%s' during the compaction!",
                             new_file->filename);
                     return fs;
@@ -7817,7 +7824,8 @@ size_t fdb_estimate_space_used_from(fdb_file_handle *fhandle,
     }
     handle = fhandle->root;
     if (!handle->file) {
-        fdb_log(&handle->log_callback, FDB_RESULT_FILE_NOT_OPEN,
+        fdb_log(&handle->log_callback, FDB_LOG_ERROR,
+                FDB_RESULT_FILE_NOT_OPEN,
                 "File not open.");
         return 0;
     }
@@ -7845,13 +7853,14 @@ size_t fdb_estimate_space_used_from(fdb_file_handle *fhandle,
             hdr_bid = prev_bid;
         }
         if (status != FDB_RESULT_SUCCESS) {
-            fdb_log(&handle->log_callback, status,
+            fdb_log(&handle->log_callback, FDB_LOG_ERROR, status,
                     "Failure to fetch DB header.");
             return 0;
         }
         if (header_len == 0) {
             status = FDB_RESULT_KV_STORE_NOT_FOUND; // can't work without header
-            fdb_log(&handle->log_callback, status, "Failure to find DB header.");
+            fdb_log(&handle->log_callback, FDB_LOG_ERROR, status,
+                    "Failure to find DB header.");
             return 0;
         }
 
@@ -7872,7 +7881,8 @@ size_t fdb_estimate_space_used_from(fdb_file_handle *fhandle,
                 doc_offset = docio_read_doc(handle->dhandle, kv_info_offset,
                                             &doc, true);
                 if (doc_offset <= 0) {
-                    fdb_log(&handle->log_callback, (fdb_status) doc_offset,
+                    fdb_log(&handle->log_callback, FDB_LOG_ERROR,
+                            (fdb_status) doc_offset,
                             "Read failure estimate_space_used.");
                     return 0;
                 }

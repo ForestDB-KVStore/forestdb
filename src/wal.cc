@@ -1283,7 +1283,7 @@ fdb_status wal_commit(fdb_txn *txn, struct filemgr *file,
             if (func) {
                 status = func(txn->handle, item->offset);
                 if (status != FDB_RESULT_SUCCESS) {
-                    fdb_log(log_callback, status,
+                    fdb_log(log_callback, FDB_LOG_ERROR, status,
                             "Error in appending a commit mark at offset %"
                             _F64 " in "
                             "a database file '%s'", item->offset,
@@ -1351,7 +1351,7 @@ fdb_status wal_commit(fdb_txn *txn, struct filemgr *file,
                     mem_overhead += sizeof(struct wal_item);
                     _wal_free_item(_item, file->wal);
                 } else {
-                    fdb_log(log_callback, status,
+                    fdb_log(log_callback, FDB_LOG_DEBUG, status,
                             "Wal commit called when wal_flush in progress."
                             "item seqnum %" _F64
                             " keylen %d flags %x action %d"
@@ -1574,7 +1574,7 @@ INLINE fdb_status _wal_do_flush(struct wal_item *item,
         fdb_status fs = flush_func(dbhandle, item, stale_seqnum_list, kvs_delta_stats);
         if (fs != FDB_RESULT_SUCCESS) {
             fdb_kvs_handle *handle = (fdb_kvs_handle *) dbhandle;
-            fdb_log(&handle->log_callback, fs,
+            fdb_log(&handle->log_callback, FDB_LOG_ERROR, fs,
                     "Failed to flush WAL item (key '%s') into a database file '%s'",
                     (const char *) item->header->key, handle->file->filename);
             return fs;
@@ -2900,7 +2900,7 @@ static fdb_status _wal_close(struct filemgr *file,
         for (next_a = NULL; a; a = next_a) {
             shandle = _get_entry(a, struct snap_handle, avl_id);
             if (_wal_snap_is_immutable(shandle)) {
-                fdb_log(log_callback, FDB_RESULT_INVALID_ARGS,
+                fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_INVALID_ARGS,
                         "WAL closed before snapshot close in kv id %" _F64
                         " in file %s", shandle->id, file->filename);
             }
@@ -2925,7 +2925,7 @@ static fdb_status _wal_close(struct filemgr *file,
              a; a = next_a) {
             shandle = _get_entry(a, struct snap_handle, avl_id);
             if (_wal_snap_is_immutable(shandle)) {
-                fdb_log(log_callback, FDB_RESULT_INVALID_ARGS,
+                fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_INVALID_ARGS,
                         "WAL closed before snapshot close in kv id %" _F64
                         " with %" _F64 " docs in file %s", shandle->id,
                         atomic_get_uint64_t(&shandle->wal_ndocs), file->filename);

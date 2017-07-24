@@ -142,7 +142,7 @@ fdb_status fdb_iterator_init(fdb_kvs_handle *handle,
         // open a new handle to make the iterator handle as a snapshot
         fs = fdb_snapshot_open(handle, &iterator->handle, FDB_SNAPSHOT_INMEM);
         if (fs != FDB_RESULT_SUCCESS) {
-            fdb_log(&handle->log_callback, fs,
+            fdb_log(&handle->log_callback, FDB_LOG_ERROR, fs,
                     "Failed to create an iterator instance due to the failure of "
                     "open operation on the KV Store '%s' in a database file '%s'",
                     _fdb_kvs_get_name(handle, handle->file),
@@ -317,7 +317,7 @@ fdb_status fdb_iterator_sequence_init(fdb_kvs_handle *handle,
         // open a new handle to make the iterator handle as a snapshot
         fs = fdb_snapshot_open(handle, &iterator->handle, FDB_SNAPSHOT_INMEM);
         if (fs != FDB_RESULT_SUCCESS) {
-            fdb_log(&handle->log_callback, fs,
+            fdb_log(&handle->log_callback, FDB_LOG_ERROR, fs,
                     "Failed to create an sequence iterator instance due to the "
                     "failure of "
                     "open operation on the KV Store '%s' in a database file '%s'",
@@ -2153,7 +2153,7 @@ fdb_status fdb_iterator_close(fdb_iterator *iterator)
         // if the handle is not for snapshot.
         fdb_status fs = fdb_kvs_close(iterator->handle);
         if (fs != FDB_RESULT_SUCCESS) {
-            fdb_log(&iterator->handle->log_callback, fs,
+            fdb_log(&iterator->handle->log_callback, FDB_LOG_ERROR, fs,
                     "Failed to close the KV Store from a database file '%s' as "
                     "part of closing the iterator",
                     iterator->handle->file->filename);

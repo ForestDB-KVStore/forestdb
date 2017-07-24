@@ -55,6 +55,7 @@ fdb_status fdb_log_init(struct fdb_log_config log_config) {
 }
 
 fdb_status fdb_log(err_log_callback *log_callback,
+                   fdb_log_levels given_log_level,
                    fdb_status status,
                    const char *format, ...)
 {
@@ -64,12 +65,7 @@ fdb_status fdb_log(err_log_callback *log_callback,
     // 4: Info    [INFO]
     // 5: Debug   [DEBG]
     // 6: Trace   [TRAC]
-    size_t cur_log_level = 0;
-    if (status != FDB_RESULT_SUCCESS) {
-        cur_log_level = 2;
-    } else {
-        cur_log_level = 4;
-    }
+    size_t cur_log_level = given_log_level;
 
     if (global_log_config.log_msg_level < cur_log_level) {
         // Configuration doesn't allow to print out

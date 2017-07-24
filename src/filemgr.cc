@@ -163,7 +163,7 @@ static void _log_errno_str(struct filemgr_ops *ops,
     if (io_error < 0) {
         char errno_msg[512];
         ops->get_errno_str(errno_msg, 512);
-        fdb_log(log_callback, io_error,
+        fdb_log(log_callback, FDB_LOG_ERROR, io_error,
                 "Error in %s on a database file '%s', %s", what, filename, errno_msg);
     }
 }
@@ -404,7 +404,8 @@ static fdb_status _filemgr_read_header(struct filemgr *file,
             const char *msg = "Crash Detected: %" _F64 " non-block aligned bytes discarded "
                 "from a database file '%s'\n";
             DBG(msg, remain, file->filename);
-            fdb_log(log_callback, FDB_RESULT_READ_FAIL /* Need to add a better error code*/,
+            fdb_log(log_callback, FDB_LOG_WARNING,
+                    FDB_RESULT_READ_FAIL /* Need to add a better error code*/,
                     msg, remain, file->filename);
         }
 
@@ -415,7 +416,8 @@ static fdb_status _filemgr_read_header(struct filemgr *file,
                 status = FDB_RESULT_NO_DB_HEADERS;
                 const char *msg = "Unable to read block from file '%s' as EOF "
                                   "reached\n";
-                fdb_log(log_callback, status, msg, file->filename);
+                fdb_log(log_callback, FDB_LOG_ERROR, status,
+                        msg, file->filename);
                 break;
             }
             ssize_t rv = filemgr_read_block(file, buf, hdr_bid_local);
@@ -424,7 +426,8 @@ static fdb_status _filemgr_read_header(struct filemgr *file,
                 const char *msg = "Unable to read a database file '%s' with "
                                   "blocksize %u\n";
                 DBG(msg, file->filename, file->blocksize);
-                fdb_log(log_callback, status, msg, file->filename, file->blocksize);
+                fdb_log(log_callback, FDB_LOG_ERROR, status,
+                        msg, file->filename, file->blocksize);
                 break;
             }
             ++block_counter;
@@ -461,7 +464,7 @@ static fdb_status _filemgr_read_header(struct filemgr *file,
                                               " with forced CRC32\n";
                             status = FDB_RESULT_INVALID_ARGS;
                             DBG(msg);
-                            fdb_log(log_callback, status, msg);
+                            fdb_log(log_callback, FDB_LOG_WARNING, status, msg);
                             break;
                         } else {
                             status = FDB_RESULT_SUCCESS;
@@ -511,14 +514,16 @@ static fdb_status _filemgr_read_header(struct filemgr *file,
                         const char *msg = "Crash Detected: CRC on disk %u != (%u | %u) "
                             "in a database file '%s'\n";
                         DBG(msg, crc_file, crc32, crc32c, file->filename);
-                        fdb_log(log_callback, status, msg, crc_file, crc32, crc32c,
+                        fdb_log(log_callback, FDB_LOG_WARNING, status,
+                                msg, crc_file, crc32, crc32c,
                                 file->filename);
                     }
                 } else {
                     status = FDB_RESULT_FILE_CORRUPTION;
                     const char *msg = "Crash Detected: Wrong Magic %" _F64
                                       " in a database file '%s'\n";
-                    fdb_log(log_callback, status, msg, magic, file->filename);
+                    fdb_log(log_callback, FDB_LOG_WARNING, status,
+                            msg, magic, file->filename);
                 }
             } else {
                 status = FDB_RESULT_NO_DB_HEADERS;
@@ -526,7 +531,8 @@ static fdb_status _filemgr_read_header(struct filemgr *file,
                     const char *msg = "Crash Detected: Last Block not DBHEADER %0.01x "
                                       "in a database file '%s'\n";
                     DBG(msg, marker[0], file->filename);
-                    fdb_log(log_callback, status, msg, marker[0], file->filename);
+                    fdb_log(log_callback, FDB_LOG_WARNING, status,
+                            msg, marker[0], file->filename);
                 }
             }
 
@@ -625,7 +631,7 @@ static void *_filemgr_prefetch_thread(void *voidargs)
                 if (filemgr_read(args->file, bid, buf, NULL, true)
                         != FDB_RESULT_SUCCESS) {
                     // 4. read failure
-                    fdb_log(args->log_callback, FDB_RESULT_READ_FAIL,
+                    fdb_log(args->log_callback, FDB_LOG_ERROR, FDB_RESULT_READ_FAIL,
                             "Prefetch thread failed to read a block with block id %" _F64
                             " from a database file '%s'", bid, args->file->filename);
                     terminate = true;
@@ -1062,7 +1068,8 @@ filemgr_open_result filemgr_open(char *filename, struct filemgr_ops *ops,
 
     result.file = file;
     result.rv = FDB_RESULT_SUCCESS;
-    fdb_log(log_callback, FDB_RESULT_SUCCESS, "Forestdb opened database file %s",
+    fdb_log(log_callback, FDB_LOG_INFO, FDB_RESULT_SUCCESS,
+            "Forestdb opened database file %s",
             filename);
 
     return result;
@@ -1171,7 +1178,7 @@ fdb_status filemgr_fetch_header(struct filemgr *file, uint64_t bid,
     status = filemgr_read(file, (bid_t)bid, _buf, log_callback, true);
 
     if (status != FDB_RESULT_SUCCESS) {
-        fdb_log(log_callback, status,
+        fdb_log(log_callback, FDB_LOG_WARNING, status,
                 "Failed to read a database header with block id %" _F64 " in "
                 "a database file '%s'", bid, file->filename);
         _filemgr_release_temp_buf(_buf);
@@ -1198,7 +1205,7 @@ fdb_status filemgr_fetch_header(struct filemgr *file, uint64_t bid,
             sizeof(magic));
     magic = _endian_decode(magic);
     if (!ver_is_valid_magic(magic)) {
-        fdb_log(log_callback, FDB_RESULT_FILE_CORRUPTION,
+        fdb_log(log_callback, FDB_LOG_WARNING, FDB_RESULT_FILE_CORRUPTION,
                 "A block magic value of %" _F64 " in the database header block"
                 "id %" _F64 " in a database file '%s'"
                 "does NOT match FILEMGR_MAGIC %" _F64 "!",
@@ -1337,7 +1344,7 @@ uint64_t filemgr_fetch_prev_header(struct filemgr *file, uint64_t bid,
         // Read the prev header
         fdb_status fs = filemgr_read(file, (bid_t)bid, _buf, log_callback, true);
         if (fs != FDB_RESULT_SUCCESS) {
-            fdb_log(log_callback, fs,
+            fdb_log(log_callback, FDB_LOG_WARNING, fs,
                     "Failed to read a previous database header with block id %"
                     _F64 " in "
                     "a database file '%s'", bid, file->filename);
@@ -1349,7 +1356,7 @@ uint64_t filemgr_fetch_prev_header(struct filemgr *file, uint64_t bid,
         if (marker[0] != BLK_MARKER_DBHEADER) {
             if (bid) {
                 // broken linked list
-                fdb_log(log_callback, FDB_RESULT_FILE_CORRUPTION,
+                fdb_log(log_callback, FDB_LOG_WARNING, FDB_RESULT_FILE_CORRUPTION,
                         "A block marker of the previous database header block id %"
                         _F64 " in "
                         "a database file '%s' does NOT match BLK_MARKER_DBHEADER!",
@@ -1364,7 +1371,7 @@ uint64_t filemgr_fetch_prev_header(struct filemgr *file, uint64_t bid,
         magic = _endian_decode(magic);
         if (!ver_is_valid_magic(magic)) {
             // broken linked list
-            fdb_log(log_callback, FDB_RESULT_FILE_CORRUPTION,
+            fdb_log(log_callback, FDB_LOG_WARNING, FDB_RESULT_FILE_CORRUPTION,
                     "A block magic value of %" _F64
                     " of the previous database header block id %" _F64 " in "
                     "a database file '%s' does NOT match FILEMGR_MAGIC %"
@@ -1441,7 +1448,8 @@ fdb_status filemgr_close(struct filemgr *file, bool cleanup_cache_onclose,
         return FDB_RESULT_SUCCESS;
     }
 
-    fdb_log(log_callback, (fdb_status)rv, "Forestdb closed database file %s",
+    fdb_log(log_callback, FDB_LOG_INFO, (fdb_status)rv,
+            "Forestdb closed database file %s",
             file->filename);
 
     spin_lock(&filemgr_openlock); // Grab the filemgr lock to avoid the race with
@@ -1943,8 +1951,8 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
     if (pos >= curr_pos) {
         const char *msg = "Read error: read offset %" _F64 " exceeds the file's "
                           "current offset %" _F64 " in a database file '%s'\n";
-        fdb_log(log_callback, FDB_RESULT_READ_FAIL, msg, pos, curr_pos,
-                file->filename);
+        fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_READ_FAIL,
+                msg, pos, curr_pos, file->filename);
         return FDB_RESULT_READ_FAIL;
     }
 
@@ -1986,8 +1994,8 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
                 }
                 const char *msg = "Read error: BID %" _F64 " in a database file '%s' "
                     "doesn't exist in the cache and read_on_cache_miss flag is turned on.\n";
-                fdb_log(log_callback, FDB_RESULT_READ_FAIL, msg, bid,
-                        file->filename);
+                fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_READ_FAIL,
+                        msg, bid, file->filename);
                 return FDB_RESULT_READ_FAIL;
             }
 
@@ -2008,7 +2016,8 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
                 const char *msg = "Read error: BID %" _F64 " in a database file '%s' "
                     "is not read correctly: only %d bytes read.\n";
                 status = r < 0 ? (fdb_status)r : FDB_RESULT_READ_FAIL;
-                fdb_log(log_callback, status, msg, bid, file->filename, r);
+                fdb_log(log_callback, FDB_LOG_ERROR, status,
+                        msg, bid, file->filename, r);
                 if (!log_callback || !log_callback->callback) {
                     dbg_print_buf(buf, file->blocksize, true, 16);
                 }
@@ -2030,7 +2039,8 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
                 }
                 const char *msg = "Read error: checksum error on BID %" _F64 " in a database file '%s' "
                     ": marker %x\n";
-                fdb_log(log_callback, status, msg, bid,
+                fdb_log(log_callback, FDB_LOG_ERROR, status,
+                        msg, bid,
                         file->filename, *((uint8_t*)buf + file->blocksize-1));
                 if (!log_callback || !log_callback->callback) {
                     dbg_print_buf(buf, file->blocksize, true, 16);
@@ -2054,7 +2064,8 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
                 const char *msg = "Read error: BID %" _F64 " in a database file '%s' "
                     "is not written in cache correctly: only %d bytes written.\n";
                 status = r < 0 ? (fdb_status) r : FDB_RESULT_WRITE_FAIL;
-                fdb_log(log_callback, status, msg, bid, file->filename, r);
+                fdb_log(log_callback, FDB_LOG_ERROR, status,
+                        msg, bid, file->filename, r);
                 if (!log_callback || !log_callback->callback) {
                     dbg_print_buf(buf, file->blocksize, true, 16);
                 }
@@ -2074,8 +2085,8 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
         if (!read_on_cache_miss) {
             const char *msg = "Read error: BID %" _F64 " in a database file '%s':"
                 "block cache is not enabled.\n";
-            fdb_log(log_callback, FDB_RESULT_READ_FAIL, msg, bid,
-                    file->filename);
+            fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_READ_FAIL,
+                    msg, bid, file->filename);
             return FDB_RESULT_READ_FAIL;
         }
 
@@ -2086,7 +2097,8 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
             const char *msg = "Read error: BID %" _F64 " in a database file '%s' "
                 "is not read correctly: only %d bytes read (block cache disabled).\n";
             status = (r < 0)? (fdb_status)r : FDB_RESULT_READ_FAIL;
-            fdb_log(log_callback, status, msg, bid, file->filename, r);
+            fdb_log(log_callback, FDB_LOG_ERROR, status,
+                    msg, bid, file->filename, r);
             if (!log_callback || !log_callback->callback) {
                 dbg_print_buf(buf, file->blocksize, true, 16);
             }
@@ -2100,7 +2112,8 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
                            file->filename);
             const char *msg = "Read error: checksum error on BID %" _F64 " in a database file '%s' "
                 ": marker %x (block cache disabled)\n";
-            fdb_log(log_callback, status, msg, bid,
+            fdb_log(log_callback, FDB_LOG_ERROR, status,
+                    msg, bid,
                     file->filename, *((uint8_t*)buf + file->blocksize-1));
             if (!log_callback || !log_callback->callback) {
                 dbg_print_buf(buf, file->blocksize, true, 16);
@@ -2126,7 +2139,8 @@ fdb_status filemgr_write_offset(struct filemgr *file, bid_t bid,
         const char *msg = "Write error: trying to write the buffer data "
             "(offset: %" _F64 ", len: %" _F64 " that exceeds the block size "
             "%" _F64 " in a database file '%s'\n";
-        fdb_log(log_callback, FDB_RESULT_WRITE_FAIL, msg, offset, len,
+        fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_WRITE_FAIL,
+                msg, offset, len,
                 file->blocksize, file->filename);
         return FDB_RESULT_WRITE_FAIL;
     }
@@ -2137,7 +2151,8 @@ fdb_status filemgr_write_offset(struct filemgr *file, bid_t bid,
             const char *msg = "Write error: trying to write at the offset %" _F64 " that is "
                               "not identified as a reusable block in "
                               "a database file '%s'\n";
-            fdb_log(log_callback, FDB_RESULT_WRITE_FAIL, msg, pos, file->filename);
+            fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_WRITE_FAIL,
+                    msg, pos, file->filename);
             return FDB_RESULT_WRITE_FAIL;
         }
     } else if (pos < curr_commit_pos) {
@@ -2148,8 +2163,8 @@ fdb_status filemgr_write_offset(struct filemgr *file, bid_t bid,
             const char *msg = "Write error: trying to write at the offset %" _F64 " that is "
                               "smaller than the current commit offset %" _F64 " in "
                               "a database file '%s'\n";
-            fdb_log(log_callback, FDB_RESULT_WRITE_FAIL, msg, pos, curr_commit_pos,
-                    file->filename);
+            fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_WRITE_FAIL,
+                    msg, pos, curr_commit_pos, file->filename);
             return FDB_RESULT_WRITE_FAIL;
         }
     }
@@ -4115,7 +4130,7 @@ void filemgr_dump_latency_stat(struct filemgr *file,
     if (!lat_file) {
         fdb_status status = FDB_RESULT_OPEN_FAIL;
         const char *msg = "Warning: Unable to open latency stats file '%s'\n";
-        fdb_log(log_callback, status, msg, latency_file_path);
+        fdb_log(log_callback, FDB_LOG_ERROR, status, msg, latency_file_path);
         return;
     }
     fprintf(lat_file, "latency(us)\t\tmin\t\tavg\t\tmax\t\tnum_samples\n");

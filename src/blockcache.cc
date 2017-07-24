@@ -1407,8 +1407,9 @@ void bcache_init(int nblock, int blocksize)
 
     int rv = init_rw_lock(&filelist_lock);
     if (rv != 0) {
-        fdb_log(NULL, FDB_RESULT_ALLOC_FAIL , "Error in bcache_init(): "
-                        "RW Lock initialization failed; ErrorCode: %d\n", rv);
+        fdb_log(NULL, FDB_LOG_ERROR, FDB_RESULT_ALLOC_FAIL,
+                "Error in bcache_init(): "
+                "RW Lock initialization failed; ErrorCode: %d\n", rv);
     }
 
     freelist_count = 0;
@@ -1435,9 +1436,10 @@ void bcache_init(int nblock, int blocksize)
 
     gettimeofday(&end, NULL);
     long elapsed = (end.tv_sec - begin.tv_sec) * 1000000 + (end.tv_usec - begin.tv_usec);
-    fdb_log(NULL, FDB_RESULT_SUCCESS, "Forestdb blockcache size %" _F64
-            " initialized in %ld us\n", (uint64_t)bcache_blocksize * nblock,
-            elapsed);
+    fdb_log(NULL, FDB_LOG_INFO, FDB_RESULT_SUCCESS,
+            "Forestdb blockcache size %" _F64
+            " initialized in %ld us\n",
+            (uint64_t)bcache_blocksize * nblock, elapsed);
 }
 
 uint64_t bcache_get_num_free_blocks()

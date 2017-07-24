@@ -1348,7 +1348,7 @@ fdb_status sb_write(struct filemgr *file, size_t sb_no,
         char errno_msg[512];
         file->ops->get_errno_str(errno_msg, 512);
         fs = FDB_RESULT_SB_RACE_CONDITION;
-        fdb_log(log_callback, fs,
+        fdb_log(log_callback, FDB_LOG_ERROR, fs,
                 "Failed to write the superblock (number: %" _F64 "), %s",
                 sb_no, errno_msg);
         return fs;
@@ -1391,7 +1391,7 @@ static fdb_status _sb_read_given_no(struct filemgr *file,
         char errno_msg[512];
         file->ops->get_errno_str(errno_msg, 512);
         fs = FDB_RESULT_SB_READ_FAIL;
-        fdb_log(log_callback, fs,
+        fdb_log(log_callback, FDB_LOG_WARNING, fs,
                 "Failed to read the superblock: file read failure (SB No.: %" _F64 "), %s",
                 sb_no, errno_msg);
         return fs;
@@ -1400,7 +1400,7 @@ static fdb_status _sb_read_given_no(struct filemgr *file,
     // block marker check
     if (buf[blocksize] != BLK_MARKER_SB) {
         fs = FDB_RESULT_SB_READ_FAIL;
-        fdb_log(log_callback, fs,
+        fdb_log(log_callback, FDB_LOG_WARNING, fs,
                 "Failed to read the superblock: "
                 "incorrect block marker (marker: %x, SB No.: %" _F64 "). "
                 "Note: this message might be a false alarm if upgrade is running.",
@@ -1416,7 +1416,7 @@ static fdb_status _sb_read_given_no(struct filemgr *file,
     // version check
     if (!ver_superblock_support(version)) {
         fs = FDB_RESULT_SB_READ_FAIL;
-        fdb_log(log_callback, fs,
+        fdb_log(log_callback, FDB_LOG_WARNING, fs,
                 "Failed to read the superblock: "
                 "not supported version (magic: %" _F64 ", SB No.: %" _F64 ")",
                 version, sb_no);
@@ -1535,7 +1535,7 @@ static fdb_status _sb_read_given_no(struct filemgr *file,
         sb->bmp_docs = NULL;
 
         fs = FDB_RESULT_SB_READ_FAIL;
-        fdb_log(log_callback, fs,
+        fdb_log(log_callback, FDB_LOG_WARNING, fs,
                 "Failed to read the superblock: "
                 "not supported version (magic: %" _F64 ", SB No.: %" _F64 ")",
                 version, sb_no);
@@ -1767,7 +1767,7 @@ fdb_status sb_init(struct filemgr *file, struct sb_config sconfig,
         if (sb_bid != i) {
             // other data was written during sb_write .. error
             fs = FDB_RESULT_SB_RACE_CONDITION;
-            fdb_log(log_callback, fs,
+            fdb_log(log_callback, FDB_LOG_ERROR, fs,
                     "Other writer interfered during sb_write (number: %" _F64 ")",
                     i);
             free(file->sb->config);

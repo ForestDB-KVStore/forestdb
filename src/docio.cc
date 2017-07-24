@@ -42,7 +42,7 @@ fdb_status docio_init(struct docio_handle *handle,
     handle->compress_document_body = compress_document_body;
     malloc_align(handle->readbuffer, FDB_SECTOR_SIZE, file->blocksize);
     if (!handle->readbuffer) {
-        fdb_log(NULL, FDB_RESULT_ALLOC_FAIL,
+        fdb_log(NULL, FDB_LOG_ERROR, FDB_RESULT_ALLOC_FAIL,
                 "(docio_init) malloc_align failed: "
                 "database file '%s'\n",
                 handle->file->filename);
@@ -166,7 +166,7 @@ bid_t docio_append_doc_raw(struct docio_handle *handle, uint64_t size, void *buf
 
 
         if (fs != FDB_RESULT_SUCCESS) {
-            fdb_log(log_callback, fs,
+            fdb_log(log_callback, FDB_LOG_ERROR, fs,
                     "Error in appending a doc block marker for a block id %" _F64
                     " into a database file '%s'", handle->curblock,
                     handle->file->filename);
@@ -175,7 +175,7 @@ bid_t docio_append_doc_raw(struct docio_handle *handle, uint64_t size, void *buf
         fs = filemgr_write_offset(handle->file, handle->curblock, offset, size,
                                   buf, (size == remaining_space), log_callback);
         if (fs != FDB_RESULT_SUCCESS) {
-            fdb_log(log_callback, fs,
+            fdb_log(log_callback, FDB_LOG_ERROR, fs,
                     "Error in writing a doc block with id %" _F64 ", offset %d, size %"
                     _F64 " to a database file '%s'", handle->curblock, offset, size,
                     handle->file->filename);
@@ -213,7 +213,7 @@ bid_t docio_append_doc_raw(struct docio_handle *handle, uint64_t size, void *buf
 
             // start from current block
             if (begin != (handle->curblock + 1)) {
-                fdb_log(log_callback, fs,
+                fdb_log(log_callback, FDB_LOG_ERROR, fs,
                         "Error in allocating blocks starting from block id %" _F64
                         " in a database file '%s'", handle->curblock + 1,
                         handle->file->filename);
@@ -223,7 +223,7 @@ bid_t docio_append_doc_raw(struct docio_handle *handle, uint64_t size, void *buf
             fs = _add_blk_marker(handle->file, handle->curblock, blocksize,
                                  marker, log_callback);
             if (fs != FDB_RESULT_SUCCESS) {
-                fdb_log(log_callback, fs,
+                fdb_log(log_callback, FDB_LOG_ERROR, fs,
                         "Error in appending a doc block marker for a block id %" _F64
                         " into a database file '%s'", handle->curblock,
                         handle->file->filename);
@@ -235,7 +235,7 @@ bid_t docio_append_doc_raw(struct docio_handle *handle, uint64_t size, void *buf
                                           true, // mark block as immutable
                                           log_callback);
                 if (fs != FDB_RESULT_SUCCESS) {
-                    fdb_log(log_callback, fs,
+                    fdb_log(log_callback, FDB_LOG_ERROR, fs,
                             "Error in writing a doc block with id %" _F64 ", offset %d, "
                             "size %" _F64 " to a database file '%s'", handle->curblock,
                             offset, size, handle->file->filename);
@@ -303,7 +303,7 @@ bid_t docio_append_doc_raw(struct docio_handle *handle, uint64_t size, void *buf
                                           blocksize, sizeof(blk_meta), &blk_meta,
                                           false, log_callback);
                 if (fs != FDB_RESULT_SUCCESS) {
-                    fdb_log(log_callback, fs,
+                    fdb_log(log_callback, FDB_LOG_ERROR, fs,
                             "Error in appending a doc block metadata for a block id %" _F64
                             " into a database file '%s'", handle->curblock,
                             handle->file->filename);
@@ -317,7 +317,7 @@ bid_t docio_append_doc_raw(struct docio_handle *handle, uint64_t size, void *buf
                                               true, // mark block as immutable
                                               log_callback);
                     if (fs != FDB_RESULT_SUCCESS) {
-                        fdb_log(log_callback, fs,
+                        fdb_log(log_callback, FDB_LOG_ERROR, fs,
                                 "Error in writing a doc block with id %" _F64 ", offset %d, "
                                 "size %" _F64 " to a database file '%s'", handle->curblock,
                                 offset, size, handle->file->filename);
@@ -347,7 +347,7 @@ bid_t docio_append_doc_raw(struct docio_handle *handle, uint64_t size, void *buf
                                             log_callback) == handle->curblock+1) {
                 // start from current block
                 if (begin != (handle->curblock + 1)) {
-                    fdb_log(log_callback, fs,
+                    fdb_log(log_callback, FDB_LOG_ERROR, fs,
                             "Error in allocating blocks starting from block id %" _F64
                             " in a database file '%s'", handle->curblock + 1,
                             handle->file->filename);
@@ -357,7 +357,7 @@ bid_t docio_append_doc_raw(struct docio_handle *handle, uint64_t size, void *buf
                 fs = _add_blk_marker(handle->file, handle->curblock, blocksize,
                                      marker, log_callback);
                 if (fs != FDB_RESULT_SUCCESS) {
-                    fdb_log(log_callback, fs,
+                    fdb_log(log_callback, FDB_LOG_ERROR, fs,
                             "Error in appending a doc block marker for a block id %" _F64
                             " into a database file '%s'", handle->curblock,
                             handle->file->filename);
@@ -369,7 +369,7 @@ bid_t docio_append_doc_raw(struct docio_handle *handle, uint64_t size, void *buf
                                               true, // mark block as immutable
                                               log_callback);
                     if (fs != FDB_RESULT_SUCCESS) {
-                        fdb_log(log_callback, fs,
+                        fdb_log(log_callback, FDB_LOG_ERROR, fs,
                                 "Error in writing a doc block with id %" _F64 ", offset %d, "
                                 "size %" _F64 " to a database file '%s'", handle->curblock,
                                 offset, size, handle->file->filename);
@@ -429,7 +429,7 @@ bid_t docio_append_doc_raw(struct docio_handle *handle, uint64_t size, void *buf
                                      log_callback);
             }
             if (fs != FDB_RESULT_SUCCESS) {
-                fdb_log(log_callback, fs,
+                fdb_log(log_callback, FDB_LOG_ERROR, fs,
                         "Error in appending a doc block marker for a block "
                         "id %" _F64 " into a database file '%s'", block_list[i],
                         handle->file->filename);
@@ -444,7 +444,7 @@ bid_t docio_append_doc_raw(struct docio_handle *handle, uint64_t size, void *buf
                                           true, // mark block as immutable
                                           log_callback);
                 if (fs != FDB_RESULT_SUCCESS) {
-                    fdb_log(log_callback, fs,
+                    fdb_log(log_callback, FDB_LOG_ERROR, fs,
                             "Error in writing an entire doc block with id %" _F64
                             ", size %" _F64 " to a database file '%s'", block_list[i], blocksize,
                             handle->file->filename);
@@ -463,7 +463,7 @@ bid_t docio_append_doc_raw(struct docio_handle *handle, uint64_t size, void *buf
                                           (remainsize == blocksize),
                                           log_callback);
                 if (fs != FDB_RESULT_SUCCESS) {
-                    fdb_log(log_callback, fs,
+                    fdb_log(log_callback, FDB_LOG_ERROR, fs,
                             "Error in writing a doc block with id %" _F64 ", "
                             "size %" _F64 " to a database file '%s'", block_list[i], remainsize,
                             handle->file->filename);
@@ -545,7 +545,7 @@ INLINE bid_t _docio_append_doc(struct docio_handle *handle, struct docio_object 
         _len = compbuf_len;
         ret = snappy_compress((char*)doc->body, length.bodylen, (char*)compbuf, &_len);
         if (ret < 0) { // LCOV_EXCL_START
-            fdb_log(log_callback, FDB_RESULT_COMPRESSION_FAIL,
+            fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_COMPRESSION_FAIL,
                     "Error in compressing the doc body of key '%s' from "
                     "a database file '%s'",
                     (char *) doc->key, handle->file->filename);
@@ -712,7 +712,7 @@ INLINE fdb_status _docio_read_through_buffer(struct docio_handle *handle,
                               log_callback, read_on_cache_miss);
         if (status != FDB_RESULT_SUCCESS) {
             if (read_on_cache_miss) {
-                fdb_log(log_callback, status,
+                fdb_log(log_callback, FDB_LOG_ERROR, status,
                         "Error in reading a doc block with id %" _F64 " from "
                         "a database file '%s'", bid, handle->file->filename);
             }
@@ -800,7 +800,7 @@ static int64_t _docio_read_length(struct docio_handle *handle,
                                                read_on_cache_miss);
     if (fs != FDB_RESULT_SUCCESS) {
         if (read_on_cache_miss) {
-            fdb_log(log_callback, fs,
+            fdb_log(log_callback, FDB_LOG_ERROR, fs,
                     "Error in reading a doc length from offset %" _F64
                     " in block id %" _F64
                     " from a database file '%s'", offset, bid,
@@ -836,7 +836,7 @@ static int64_t _docio_read_length(struct docio_handle *handle,
 
         fs = _docio_read_through_buffer(handle, bid, log_callback, true);
         if (fs != FDB_RESULT_SUCCESS) {
-            fdb_log(log_callback, fs,
+            fdb_log(log_callback, FDB_LOG_ERROR, fs,
                     "Error in reading a doc length from an additional block "
                     "offset %" _F64 " in block id %" _F64
                     " from a database file '%s'", offset,
@@ -888,7 +888,7 @@ static int64_t _docio_read_doc_component(struct docio_handle *handle,
     while(rest_len > 0) {
         fs = _docio_read_through_buffer(handle, bid, log_callback, true);
         if (fs != FDB_RESULT_SUCCESS) {
-            fdb_log(log_callback, fs,
+            fdb_log(log_callback, FDB_LOG_ERROR, fs,
                     "Error in reading a doc block with block id %" _F64 " from "
                     "a database file '%s'", bid, handle->file->filename);
             return (int64_t)fs;
@@ -915,7 +915,7 @@ static int64_t _docio_read_doc_component(struct docio_handle *handle,
             if (rest_len > 0 &&
                 bid >= filemgr_get_pos(handle->file) / handle->file->blocksize) {
                 // no more data in the file .. the file is corrupted
-                fdb_log(log_callback, FDB_RESULT_FILE_CORRUPTION,
+                fdb_log(log_callback, FDB_LOG_FATAL, FDB_RESULT_FILE_CORRUPTION,
                         "Fatal error!!! Database file '%s' is corrupted.",
                         handle->file->filename);
                 return (int64_t)FDB_RESULT_FILE_CORRUPTION;
@@ -943,7 +943,7 @@ static int64_t _docio_read_doc_component_comp(struct docio_handle *handle,
     _offset = _docio_read_doc_component(handle, offset,
                                         comp_len, comp_data_out, log_callback);
     if (_offset < 0) {
-        fdb_log(log_callback, (fdb_status) _offset,
+        fdb_log(log_callback, FDB_LOG_ERROR, (fdb_status) _offset,
                 "Error in reading the file with offset %" _F64 ", length %d "
                 "from a database file '%s'", offset, len,
                 handle->file->filename);
@@ -954,14 +954,14 @@ static int64_t _docio_read_doc_component_comp(struct docio_handle *handle,
     ret = snappy_uncompress((char*)comp_data_out, comp_len,
                             (char*)buf_out, &uncomp_size);
     if (ret < 0) {
-        fdb_log(log_callback, FDB_RESULT_COMPRESSION_FAIL,
+        fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_COMPRESSION_FAIL,
                 "Error in decompressing the data that was read with the file "
                 "offset %" _F64 ", length %d from a database file '%s'",
                 offset, len, handle->file->filename);
         return (int64_t) FDB_RESULT_COMPRESSION_FAIL;
     }
     if (uncomp_size != len) {
-        fdb_log(log_callback, FDB_RESULT_COMPRESSION_FAIL,
+        fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_COMPRESSION_FAIL,
                 "Error in decompressing the data with the file offset "
                 "%" _F64 " in a database file '%s', because the uncompressed length %d "
                 "is not same as the expected length %d",
@@ -998,7 +998,7 @@ fdb_status docio_read_doc_length(struct docio_handle *handle,
     // checksum check
     checksum = _docio_length_checksum(_length, handle);
     if (checksum != _length.checksum) {
-        fdb_log(log_callback, FDB_RESULT_CHECKSUM_ERROR,
+        fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_CHECKSUM_ERROR,
                 "doc_length checksum mismatch error in a database file '%s'"
                 " crc %x != %x (crc in doc) keylen %d metalen %d bodylen %d "
                 "bodylen_ondisk %d offset %" _F64, handle->file->filename,
@@ -1009,7 +1009,7 @@ fdb_status docio_read_doc_length(struct docio_handle *handle,
 
     *length = _docio_length_decode(_length);
     if (length->keylen == 0 || length->keylen > FDB_MAX_KEYLEN_INTERNAL) {
-        fdb_log(log_callback, FDB_RESULT_FILE_CORRUPTION,
+        fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_FILE_CORRUPTION,
                 "Error in decoding the doc length metadata in file %s"
                 " crc %x keylen %d metalen %d bodylen %d "
                 "bodylen_ondisk %d offset %" _F64, handle->file->filename,
@@ -1031,7 +1031,7 @@ fdb_status docio_read_doc_key(struct docio_handle *handle, uint64_t offset,
 
     _offset = _docio_read_length(handle, offset, &_length, log_callback, true);
     if (_offset < 0) {
-        fdb_log(log_callback, (fdb_status) _offset,
+        fdb_log(log_callback, FDB_LOG_ERROR, (fdb_status) _offset,
                 "Error in reading the doc length metadata with offset %" _F64 " from "
                 "a database file '%s'",
                 offset, handle->file->filename);
@@ -1049,7 +1049,7 @@ fdb_status docio_read_doc_key(struct docio_handle *handle, uint64_t offset,
     // checksum check
     checksum = _docio_length_checksum(_length, handle);
     if (checksum != _length.checksum) {
-        fdb_log(log_callback, FDB_RESULT_CHECKSUM_ERROR,
+        fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_CHECKSUM_ERROR,
                 "doc_length key checksum mismatch error in a database file '%s'"
                 " crc %x != %x (crc in doc) keylen %d metalen %d bodylen %d "
                 "bodylen_ondisk %d offset %" _F64, handle->file->filename,
@@ -1060,7 +1060,7 @@ fdb_status docio_read_doc_key(struct docio_handle *handle, uint64_t offset,
 
     length = _docio_length_decode(_length);
     if (length.keylen == 0 || length.keylen > FDB_MAX_KEYLEN_INTERNAL) {
-        fdb_log(log_callback, FDB_RESULT_FILE_CORRUPTION,
+        fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_FILE_CORRUPTION,
                 "Error in decoding the doc key length metadata in file %s"
                 " crc %x keylen %d metalen %d bodylen %d "
                 "bodylen_ondisk %d offset %" _F64, handle->file->filename,
@@ -1072,7 +1072,7 @@ fdb_status docio_read_doc_key(struct docio_handle *handle, uint64_t offset,
     _offset = _docio_read_doc_component(handle, _offset, length.keylen,
                                         keybuf, log_callback);
     if (_offset < 0) {
-        fdb_log(log_callback, (fdb_status) _offset,
+        fdb_log(log_callback, FDB_LOG_ERROR, (fdb_status) _offset,
                 "Error in reading a key with offset %" _F64 ", length %d "
                 "from a database file '%s'", _offset, length.keylen,
                 handle->file->filename);
@@ -1120,7 +1120,7 @@ int64_t docio_read_doc_key_meta(struct docio_handle *handle, uint64_t offset,
                                  read_on_cache_miss);
     if (_offset < 0) {
         if (read_on_cache_miss) {
-            fdb_log(log_callback, (fdb_status) _offset,
+            fdb_log(log_callback, FDB_LOG_ERROR, (fdb_status) _offset,
                     "Error in reading the doc length metadata with offset %" _F64 " from "
                     "a database file '%s'",
                     offset, handle->file->filename);
@@ -1139,7 +1139,7 @@ int64_t docio_read_doc_key_meta(struct docio_handle *handle, uint64_t offset,
     // checksum check
     checksum = _docio_length_checksum(_length, handle);
     if (checksum != _length.checksum) {
-        fdb_log(log_callback, FDB_RESULT_CHECKSUM_ERROR,
+        fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_CHECKSUM_ERROR,
                 "doc_length meta checksum mismatch error in a database file '%s'"
                 " crc %x != %x (crc in doc) keylen %d metalen %d bodylen %d "
                 "bodylen_ondisk %d offset %" _F64, handle->file->filename,
@@ -1150,7 +1150,7 @@ int64_t docio_read_doc_key_meta(struct docio_handle *handle, uint64_t offset,
 
     doc->length = _docio_length_decode(_length);
     if (doc->length.keylen == 0 || doc->length.keylen > FDB_MAX_KEYLEN_INTERNAL) {
-        fdb_log(log_callback, FDB_RESULT_FILE_CORRUPTION,
+        fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_FILE_CORRUPTION,
                 "Error in decoding the doc length metadata (key length: %d) from "
                 "a database file '%s'", doc->length.keylen, handle->file->filename);
         return (int64_t) FDB_RESULT_FILE_CORRUPTION;
@@ -1168,7 +1168,7 @@ int64_t docio_read_doc_key_meta(struct docio_handle *handle, uint64_t offset,
     _offset = _docio_read_doc_component(handle, _offset, doc->length.keylen,
                                         doc->key, log_callback);
     if (_offset < 0) {
-        fdb_log(log_callback, (fdb_status) _offset,
+        fdb_log(log_callback, FDB_LOG_ERROR, (fdb_status) _offset,
                 "Error in reading a key with offset %" _F64 ", length %d "
                 "from a database file '%s'", offset, doc->length.keylen,
                 handle->file->filename);
@@ -1181,7 +1181,7 @@ int64_t docio_read_doc_key_meta(struct docio_handle *handle, uint64_t offset,
                                         sizeof(timestamp_t),
                                         &_timestamp, log_callback);
     if (_offset < 0) {
-        fdb_log(log_callback, (fdb_status) _offset,
+        fdb_log(log_callback, FDB_LOG_ERROR, (fdb_status) _offset,
                 "Error in reading a timestamp with offset %" _F64 ", length %d "
                 "from a database file '%s'", offset, sizeof(timestamp_t),
                 handle->file->filename);
@@ -1194,7 +1194,7 @@ int64_t docio_read_doc_key_meta(struct docio_handle *handle, uint64_t offset,
     _offset = _docio_read_doc_component(handle, _offset, sizeof(fdb_seqnum_t),
                                         (void *)&_seqnum, log_callback);
     if (_offset < 0) {
-        fdb_log(log_callback, (fdb_status) _offset,
+        fdb_log(log_callback, FDB_LOG_ERROR, (fdb_status) _offset,
                 "Error in reading a sequence number with offset %" _F64 ", length %d "
                 "from a database file '%s'", offset, sizeof(fdb_seqnum_t),
                 handle->file->filename);
@@ -1206,7 +1206,7 @@ int64_t docio_read_doc_key_meta(struct docio_handle *handle, uint64_t offset,
     _offset = _docio_read_doc_component(handle, _offset, doc->length.metalen,
                                         doc->meta, log_callback);
     if (_offset < 0) {
-        fdb_log(log_callback, (fdb_status) _offset,
+        fdb_log(log_callback, FDB_LOG_ERROR, (fdb_status) _offset,
                 "Error in reading the doc metadata with offset %" _F64 ", length %d "
                 "from a database file '%s'", offset, doc->length.metalen,
                 handle->file->filename);
@@ -1239,7 +1239,7 @@ int64_t docio_read_doc(struct docio_handle *handle, uint64_t offset,
                                  read_on_cache_miss);
     if (_offset < 0) {
         if (read_on_cache_miss) {
-            fdb_log(log_callback, (fdb_status) _offset,
+            fdb_log(log_callback, FDB_LOG_ERROR, (fdb_status) _offset,
                     "Error in reading the doc length metadata with offset %" _F64 " from "
                     "a database file '%s'",
                     offset, handle->file->filename);
@@ -1258,7 +1258,7 @@ int64_t docio_read_doc(struct docio_handle *handle, uint64_t offset,
     // checksum check
     checksum = _docio_length_checksum(_length, handle);
     if (checksum != _length.checksum) {
-        fdb_log(log_callback, FDB_RESULT_CHECKSUM_ERROR,
+        fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_CHECKSUM_ERROR,
                 "doc_length body checksum mismatch error in a database file '%s'"
                 " crc %x != %x (crc in doc) keylen %d metalen %d bodylen %d "
                 "bodylen_ondisk %d offset %" _F64, handle->file->filename,
@@ -1276,7 +1276,7 @@ int64_t docio_read_doc(struct docio_handle *handle, uint64_t offset,
         // transaction commit marker. Thus, all lengths should be zero.
         if (doc->length.keylen || doc->length.metalen ||
             doc->length.bodylen || doc->length.bodylen_ondisk) {
-            fdb_log(log_callback, FDB_RESULT_FILE_CORRUPTION,
+            fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_FILE_CORRUPTION,
                     "File corruption: Doc length fields in a transaction commit marker "
                     "was not zero in a database file '%s' offset %" _F64,
                     handle->file->filename, offset);
@@ -1289,7 +1289,7 @@ int64_t docio_read_doc(struct docio_handle *handle, uint64_t offset,
                                             sizeof(doc_offset), &doc_offset,
                                             log_callback);
         if (_offset < 0) {
-            fdb_log(log_callback, (fdb_status) _offset,
+            fdb_log(log_callback, FDB_LOG_ERROR, (fdb_status) _offset,
                     "Error in reading an offset of a committed doc from an offset %" _F64
                     " in a database file '%s'", offset, handle->file->filename);
             free_docio_object(doc, key_alloc, meta_alloc, body_alloc);
@@ -1299,7 +1299,7 @@ int64_t docio_read_doc(struct docio_handle *handle, uint64_t offset,
         // The offset of the actual document that pointed by this commit marker
         // should not be greater than the file size.
         if (doc->doc_offset > filemgr_get_pos(handle->file)) {
-            fdb_log(log_callback, FDB_RESULT_FILE_CORRUPTION,
+            fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_FILE_CORRUPTION,
                     "File corruption: Offset %" _F64 " of the actual doc pointed by the "
                     "commit marker is greater than the size %" _F64 " of a database file '%s'",
                     doc->doc_offset, filemgr_get_pos(handle->file),
@@ -1311,7 +1311,7 @@ int64_t docio_read_doc(struct docio_handle *handle, uint64_t offset,
     }
 
     if (doc->length.keylen == 0 || doc->length.keylen > FDB_MAX_KEYLEN_INTERNAL) {
-        fdb_log(log_callback, FDB_RESULT_FILE_CORRUPTION,
+        fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_FILE_CORRUPTION,
                 "Error in decoding the doc length metadata (key length: %d) from "
                 "a database file '%s' offset %" _F64, doc->length.keylen,
                 handle->file->filename, offset);
@@ -1336,7 +1336,7 @@ int64_t docio_read_doc(struct docio_handle *handle, uint64_t offset,
                                         doc->key,
                                         log_callback);
     if (_offset < 0) {
-        fdb_log(log_callback, (fdb_status) _offset,
+        fdb_log(log_callback, FDB_LOG_ERROR, (fdb_status) _offset,
                 "Error in reading a key with offset %" _F64 ", length %d "
                 "from a database file '%s'", offset, doc->length.keylen,
                 handle->file->filename);
@@ -1350,7 +1350,7 @@ int64_t docio_read_doc(struct docio_handle *handle, uint64_t offset,
                                         &_timestamp,
                                         log_callback);
     if (_offset < 0) {
-        fdb_log(log_callback, (fdb_status) _offset,
+        fdb_log(log_callback, FDB_LOG_ERROR, (fdb_status) _offset,
                 "Error in reading a timestamp with offset %" _F64 ", length %d "
                 "from a database file '%s'", offset, sizeof(timestamp_t),
                 handle->file->filename);
@@ -1365,7 +1365,7 @@ int64_t docio_read_doc(struct docio_handle *handle, uint64_t offset,
                                         (void *)&_seqnum,
                                         log_callback);
     if (_offset < 0) {
-        fdb_log(log_callback, (fdb_status) _offset,
+        fdb_log(log_callback, FDB_LOG_ERROR, (fdb_status) _offset,
                 "Error in reading a sequence number with offset %" _F64 ", length %d "
                 "from a database file '%s'", offset, sizeof(fdb_seqnum_t),
                 handle->file->filename);
@@ -1377,7 +1377,7 @@ int64_t docio_read_doc(struct docio_handle *handle, uint64_t offset,
     _offset = _docio_read_doc_component(handle, _offset, doc->length.metalen,
                                         doc->meta, log_callback);
     if (_offset < 0) {
-        fdb_log(log_callback, (fdb_status) _offset,
+        fdb_log(log_callback, FDB_LOG_ERROR, (fdb_status) _offset,
                 "Error in reading the doc metadata with offset %" _F64 ", length %d "
                 "from a database file '%s'", offset, doc->length.metalen,
                 handle->file->filename);
@@ -1392,7 +1392,7 @@ int64_t docio_read_doc(struct docio_handle *handle, uint64_t offset,
                                                  doc->length.bodylen_ondisk, doc->body,
                                                  comp_body, log_callback);
         if (_offset < 0) {
-            fdb_log(log_callback, (fdb_status) _offset,
+            fdb_log(log_callback, FDB_LOG_ERROR, (fdb_status) _offset,
                     "Error in reading a compressed doc with offset %" _F64 ", length %d "
                     "from a database file '%s'", offset, doc->length.bodylen,
                     handle->file->filename);
@@ -1406,7 +1406,7 @@ int64_t docio_read_doc(struct docio_handle *handle, uint64_t offset,
         _offset = _docio_read_doc_component(handle, _offset, doc->length.bodylen,
                                             doc->body, log_callback);
         if (_offset < 0) {
-            fdb_log(log_callback, (fdb_status) _offset,
+            fdb_log(log_callback, FDB_LOG_ERROR, (fdb_status) _offset,
                     "Error in reading a doc with offset %" _F64 ", length %d "
                     "from a database file '%s'", offset, doc->length.bodylen,
                     handle->file->filename);
@@ -1418,7 +1418,7 @@ int64_t docio_read_doc(struct docio_handle *handle, uint64_t offset,
     _offset = _docio_read_doc_component(handle, _offset, doc->length.bodylen,
                                         doc->body, log_callback);
     if (_offset < 0) {
-        fdb_log(log_callback, (fdb_status) _offset,
+        fdb_log(log_callback, FDB_LOG_ERROR, (fdb_status) _offset,
                 "Error in reading a doc with offset %" _F64 ", length %d "
                 "from a database file '%s'", offset, doc->length.bodylen,
                 handle->file->filename);
@@ -1432,7 +1432,7 @@ int64_t docio_read_doc(struct docio_handle *handle, uint64_t offset,
     _offset = _docio_read_doc_component(handle, _offset, sizeof(crc_file),
                                         (void *)&crc_file, log_callback);
     if (_offset < 0) {
-        fdb_log(log_callback, (fdb_status) _offset,
+        fdb_log(log_callback, FDB_LOG_ERROR, (fdb_status) _offset,
                 "Error in reading a doc's CRC value with offset %" _F64 ", length %d "
                 "from a database file '%s'", offset, sizeof(crc_file),
                 handle->file->filename);
@@ -1478,7 +1478,7 @@ int64_t docio_read_doc(struct docio_handle *handle, uint64_t offset,
                            handle->file->crc_mode);
     }
     if (crc != crc_file) {
-        fdb_log(log_callback, FDB_RESULT_CHECKSUM_ERROR,
+        fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_CHECKSUM_ERROR,
                 "doc_body checksum mismatch error in a database file '%s'"
                 " crc %x != %x (crc in doc) keylen %d metalen %d bodylen %d "
                 "bodylen_ondisk %d offset %" _F64, handle->file->filename,
@@ -1516,7 +1516,7 @@ static int _submit_async_io_requests(struct docio_handle *handle,
         // Error loggings
         char errno_msg[512];
         handle->file->ops->get_errno_str(errno_msg, 512);
-        fdb_log(handle->log_callback, (fdb_status) num_sub,
+        fdb_log(handle->log_callback, FDB_LOG_ERROR, (fdb_status) num_sub,
                 "Error in submitting async I/O requests to a file '%s', errno msg: %s",
                 handle->file->filename, errno_msg);
         return num_sub;
@@ -1524,7 +1524,7 @@ static int _submit_async_io_requests(struct docio_handle *handle,
         // Error loggings
         char errno_msg[512];
         handle->file->ops->get_errno_str(errno_msg, 512);
-        fdb_log(handle->log_callback, (fdb_status) num_sub,
+        fdb_log(handle->log_callback, FDB_LOG_ERROR, (fdb_status) num_sub,
                 "Error in submitting async I/O requests to a file '%s', errno msg: %s, "
                 "%d requests were submitted, but only %d requests were processed",
                 handle->file->filename, errno_msg, size, num_sub);
@@ -1538,7 +1538,7 @@ static int _submit_async_io_requests(struct docio_handle *handle,
             // Error loggings
             char errno_msg[512];
             handle->file->ops->get_errno_str(errno_msg, 512);
-            fdb_log(handle->log_callback, (fdb_status) num_events,
+            fdb_log(handle->log_callback, FDB_LOG_ERROR, (fdb_status) num_events,
                     "Error in getting async I/O events from the completion queue "
                     "for a file '%s', errno msg: %s", handle->file->filename, errno_msg);
             return num_events;

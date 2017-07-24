@@ -121,7 +121,7 @@ static void * bgflusher_thread(void *voidargs)
                     filemgr_close(file, 0, file->filename, log_callback);
 
                 } else {
-                    fdb_log(log_callback, fs,
+                    fdb_log(log_callback, FDB_LOG_ERROR, fs,
                             "Failed to open the file '%s' for background flushing\n.",
                             file->filename);
                 }

@@ -60,8 +60,8 @@ fdb_status fdb_get_kv(fdb_kvs_handle *handle,
         if (doc) {
             fdb_doc_free(doc);
         }
-        fdb_log(&handle->log_callback, fs,
-                "Warning: Failed to allocate fdb_doc instance for key '%s' in "
+        fdb_log(&handle->log_callback, FDB_LOG_ERROR, fs,
+                "Failed to allocate fdb_doc instance for key '%s' in "
                 "fdb_get_kv API.", (const char *)key);
         return fs;
     } // LCOV_EXCL_STOP
@@ -102,7 +102,7 @@ fdb_status fdb_set_kv(fdb_kvs_handle *handle,
         if (doc) {
             fdb_doc_free(doc);
         }
-        fdb_log(&handle->log_callback, fs,
+        fdb_log(&handle->log_callback, FDB_LOG_ERROR, fs,
                 "Warning: Failed to allocate fdb_doc instance for key '%s' in "
                 "fdb_set_kv API.", (const char *)key);
         return fs;
@@ -138,7 +138,7 @@ fdb_status fdb_del_kv(fdb_kvs_handle *handle,
         if (doc) {
             fdb_doc_free(doc);
         }
-        fdb_log(&handle->log_callback, fs,
+        fdb_log(&handle->log_callback, FDB_LOG_ERROR, fs,
                 "Warning: Failed to allocate fdb_doc instance for key '%s' in "
                 "fdb_del_kv API.", (const char *)key);
         return fs;

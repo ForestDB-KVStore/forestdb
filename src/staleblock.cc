@@ -89,12 +89,12 @@ static void fdb_add_inmem_stale_info(fdb_kvs_handle *handle,
             ret = snappy_compress((char*)doc->body, doc->length.bodylen,
                 (char*)entry->ctx, &buflen);
             if (ret != 0) {
-                fdb_log(NULL, FDB_RESULT_COMPRESSION_FAIL,
-                    "(fdb_add_inmem_stale_info) "
-                    "Compression error from a database file '%s'"
-                    ": return value %d, header revnum %" _F64 ", "
-                    "doc offset %" _F64 "\n",
-                    file->filename, ret, revnum, doc_offset);
+                fdb_log(NULL, FDB_LOG_ERROR, FDB_RESULT_COMPRESSION_FAIL,
+                        "(fdb_add_inmem_stale_info) "
+                        "Compression error from a database file '%s'"
+                        ": return value %d, header revnum %" _F64 ", "
+                        "doc offset %" _F64 "\n",
+                        file->filename, ret, revnum, doc_offset);
                 if (!a) {
                     // 'item' is allocated in this function call.
                     avl_remove(&file->stale_info_tree, &item->avl);
@@ -170,11 +170,11 @@ void fdb_load_inmem_stale_info(fdb_kvs_handle *handle)
             ret = docio_read_doc(handle->dhandle, offset, &doc, true);
             if (ret <= 0) {
                 // read fail .. escape
-                fdb_log(NULL, (fdb_status)ret,
-                    "Error in reading a stale region info document "
-                    "from a database file '%s'"
-                    ": revnum %" _F64 ", offset %" _F64 "\n",
-                    file->filename, revnum, offset);
+                fdb_log(NULL, FDB_LOG_ERROR, (fdb_status)ret,
+                        "Error in reading a stale region info document "
+                        "from a database file '%s'"
+                        ": revnum %" _F64 ", offset %" _F64 "\n",
+                        file->filename, revnum, offset);
                 offset = BLK_NOT_FOUND;
                 continue;
             }
@@ -609,13 +609,13 @@ reusable_block_list fdb_get_reusable_block(fdb_kvs_handle *handle,
         if (compress_inmem_stale_info) {
             uncomp_buf = (void*)calloc(1, uncomp_buflen);
             if (!uncomp_buf) {
-                fdb_log(NULL, FDB_RESULT_ALLOC_FAIL,
-                    "(fdb_get_reusable_block) "
-                    "calloc of 'uncomp_buf' failed: "
-                    "database file '%s', "
-                    "uncomp_buflen %d\n",
-                    handle->file->filename,
-                    (int)uncomp_buflen);
+                fdb_log(NULL, FDB_LOG_ERROR, FDB_RESULT_ALLOC_FAIL,
+                        "(fdb_get_reusable_block) "
+                        "calloc of 'uncomp_buf' failed: "
+                        "database file '%s', "
+                        "uncomp_buflen %d\n",
+                        handle->file->filename,
+                        (int)uncomp_buflen);
                 free(revnum_array);
 
                 reusable_block_list ret;
@@ -647,13 +647,13 @@ reusable_block_list fdb_get_reusable_block(fdb_kvs_handle *handle,
             }
             if (!new_revnum_array) {
                 // realloc() of revnum_array failed.
-                fdb_log(NULL, FDB_RESULT_ALLOC_FAIL,
-                    "(fdb_get_reusable_block) "
-                    "realloc of 'revnum_array' failed: "
-                    "database file '%s', "
-                    "max_revnum_array %d\n",
-                    handle->file->filename,
-                    (int)max_revnum_array);
+                fdb_log(NULL, FDB_LOG_ERROR, FDB_RESULT_ALLOC_FAIL,
+                        "(fdb_get_reusable_block) "
+                        "realloc of 'revnum_array' failed: "
+                        "database file '%s', "
+                        "max_revnum_array %d\n",
+                        handle->file->filename,
+                        (int)max_revnum_array);
                 free(uncomp_buf);
                 free(revnum_array);
 
@@ -685,15 +685,15 @@ reusable_block_list fdb_get_reusable_block(fdb_kvs_handle *handle,
 
                         if (!new_uncomp_buf) {
                             // realloc() of uncomp_buf failed.
-                            fdb_log(NULL, FDB_RESULT_ALLOC_FAIL,
-                                "(fdb_get_reusable_block) "
-                                "realloc of 'uncomp_buf' failed: "
-                                "database file '%s', "
-                                "uncomp_buflen %d, "
-                                "entry->ctxlen %d\n",
-                                handle->file->filename,
-                                (int)uncomp_buflen,
-                                (int)entry->ctxlen);
+                            fdb_log(NULL, FDB_LOG_ERROR, FDB_RESULT_ALLOC_FAIL,
+                                    "(fdb_get_reusable_block) "
+                                    "realloc of 'uncomp_buf' failed: "
+                                    "database file '%s', "
+                                    "uncomp_buflen %d, "
+                                    "entry->ctxlen %d\n",
+                                    handle->file->filename,
+                                    (int)uncomp_buflen,
+                                    (int)entry->ctxlen);
                             free(uncomp_buf);
                             free(revnum_array);
 
@@ -709,12 +709,12 @@ reusable_block_list fdb_get_reusable_block(fdb_kvs_handle *handle,
                         r = snappy_uncompress((char*)entry->ctx, entry->comp_ctxlen,
                                               (char*)uncomp_buf, &len);
                         if (r != 0) {
-                            fdb_log(NULL, FDB_RESULT_COMPRESSION_FAIL,
-                                "(fdb_get_reusable_block) "
-                                "Uncompression error from a database file '%s'"
-                                ": return value %d, header revnum %" _F64 ", "
-                                "doc offset %" _F64 "\n",
-                                handle->file->filename, r, revnum, entry->offset);
+                            fdb_log(NULL, FDB_LOG_ERROR, FDB_RESULT_COMPRESSION_FAIL,
+                                    "(fdb_get_reusable_block) "
+                                    "Uncompression error from a database file '%s'"
+                                    ": return value %d, header revnum %" _F64 ", "
+                                    "doc offset %" _F64 "\n",
+                                    handle->file->filename, r, revnum, entry->offset);
                             free(uncomp_buf);
                             free(revnum_array);
 
