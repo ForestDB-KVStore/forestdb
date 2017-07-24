@@ -26,6 +26,7 @@
 #include "hbtrie.h"
 #include "docio.h"
 #include "staleblock.h"
+#include "log_message.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,11 +43,6 @@ void buf2buf(size_t chunksize_src, void *buf_src,
 size_t _fdb_readkey_wrap(void *handle, uint64_t offset, void *buf);
 size_t _fdb_readseq_wrap(void *handle, uint64_t offset, void *buf);
 int _fdb_custom_cmp_wrap(void *key1, void *key2, void *aux);
-
-fdb_status fdb_log_init(struct fdb_log_config log_config);
-fdb_status fdb_log(err_log_callback *callback,
-                   fdb_status status,
-                   const char *format, ...);
 
 fdb_status _fdb_clone_snapshot(fdb_kvs_handle *handle_in,
                                fdb_kvs_handle *handle_out);

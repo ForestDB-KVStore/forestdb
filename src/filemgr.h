@@ -56,12 +56,6 @@ extern "C" {
 #define FILEMGR_CANCEL_COMPACTION 0x40 // Cancel the compaction
 #define FILEMGR_SUCCESSFULLY_COMPACTED 0x80 // Compaction is done
 
-struct fdb_log_config {
-    fdb_log_config(): log_msg_level(1) {}
-
-    size_t log_msg_level;
-};
-
 struct filemgr_config {
 
     filemgr_config& operator=(const filemgr_config& config) {
