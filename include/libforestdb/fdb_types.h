@@ -480,7 +480,17 @@ typedef struct {
      * Breakpad crash catcher settings
      */
     const char* breakpad_minidump_dir;
-
+    /**
+     * Maximum level of message that will be printed out.
+     * 0: nothing.
+     * 1: up to Fatal level (default).
+     * 2: up to Error level.
+     * 3: up to Warning level.
+     * 4: up to Info level.
+     * 5: up to Debug level.
+     * 6: up to Trace level.
+     */
+    size_t log_msg_level;
 } fdb_config;
 
 typedef struct {

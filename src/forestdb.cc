@@ -710,6 +710,11 @@ fdb_status fdb_init(fdb_config *config)
             return FDB_RESULT_TOO_BIG_BUFFER_CACHE;
         }
 #endif
+        // Initialize log message routine.
+        struct fdb_log_config _log_config;
+        _log_config.log_msg_level = config->log_msg_level;
+        fdb_log_init(_log_config);
+
         // initialize file manager and block cache
         f_config.blocksize = _config.blocksize;
         f_config.ncacheblock = _config.buffercache_size / _config.blocksize;

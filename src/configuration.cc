@@ -97,6 +97,9 @@ fdb_config get_default_config(void) {
     // Breakpad minidump directory, set to current working dir
     fconfig.breakpad_minidump_dir = ".";
 
+    // Default log level: FATAL (1)
+    fconfig.log_msg_level = 1;
+
     return fconfig;
 }
 
@@ -169,6 +172,10 @@ bool validate_fdb_config(fdb_config *fconfig) {
     }
     if (fconfig->num_keeping_headers == 0) {
         // num_keeping_headers should be greater than zero
+        return false;
+    }
+    if (fconfig->log_msg_level > 6) {
+        // Log level: 0 to 6.
         return false;
     }
 
