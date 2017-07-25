@@ -5284,7 +5284,8 @@ static fdb_status _fdb_compact_move_docs(fdb_kvs_handle *handle,
                                          struct docio_handle *new_dhandle,
                                          struct btreeblk_handle *new_bhandle,
                                          size_t *prob,
-                                         bool clone_docs)
+                                         bool clone_docs,
+                                         const fdb_compact_opt* compact_opt)
 {
     uint8_t deleted;
     uint64_t window_size;
@@ -5437,7 +5438,12 @@ static fdb_status _fdb_compact_move_docs(fdb_kvs_handle *handle,
         if (c >= offset_array_max ||
             (c > 0 && hr != HBTRIE_RESULT_SUCCESS)) {
             // Sort offsets to minimize random accesses.
-            qsort(offset_array, c, sizeof(uint64_t), _fdb_cmp_uint64_t);
+            if (compact_opt && compact_opt->sort_order == FDB_COMPACT_SORT_BY_KEY) {
+                // Sort by key: use the array without sorting by offset.
+            } else {
+                // Otherwise: no specified option OR sort by offset.
+                qsort(offset_array, c, sizeof(uint64_t), _fdb_cmp_uint64_t);
+            }
 
             // 1) read all documents in offset_array, and
             // 2) move them into the new file.
@@ -5650,7 +5656,8 @@ _fdb_compact_move_docs_upto_marker(fdb_kvs_handle *rhandle,
                                    bid_t last_hdr_bid,
                                    fdb_seqnum_t last_seq,
                                    size_t *prob,
-                                   bool clone_docs)
+                                   bool clone_docs,
+                                   const fdb_compact_opt* compact_opt)
 {
     size_t header_len = 0;
     bid_t old_hdr_bid = 0;
@@ -5674,7 +5681,7 @@ _fdb_compact_move_docs_upto_marker(fdb_kvs_handle *rhandle,
         // compact_upto marker is the same as the latest commit header.
         return _fdb_compact_move_docs(rhandle, new_file, new_trie, new_idtree,
                                       new_seqtree, new_staletree, new_dhandle, new_bhandle,
-                                      prob, clone_docs);
+                                      prob, clone_docs, compact_opt);
     }
 
     old_hdr_bid = last_hdr_bid;
@@ -5765,7 +5772,7 @@ _fdb_compact_move_docs_upto_marker(fdb_kvs_handle *rhandle,
     // Move all docs from old file to new file
     fs = _fdb_compact_move_docs(&handle, new_file, new_trie, new_idtree,
                                 new_seqtree, new_staletree, new_dhandle, new_bhandle,
-                                prob, clone_docs);
+                                prob, clone_docs, compact_opt);
     if (fs != FDB_RESULT_SUCCESS) {
         btreeblk_end(handle.bhandle);
         _fdb_close(&handle);
@@ -6870,14 +6877,16 @@ fdb_status _fdb_compact_file(fdb_kvs_handle *handle,
                              struct btree *new_seqtree,
                              struct btree *new_staletree,
                              bid_t marker_bid,
-                             bool clone_docs);
+                             bool clone_docs,
+                             const fdb_compact_opt* compact_opt);
 
 fdb_status fdb_compact_file(fdb_file_handle *fhandle,
                             const char *new_filename,
                             bool in_place_compaction,
                             bid_t marker_bid,
                             bool clone_docs,
-                            const fdb_encryption_key *new_encryption_key)
+                            const fdb_encryption_key *new_encryption_key,
+                            const fdb_compact_opt* compact_opt)
 {
     struct filemgr *new_file;
     struct filemgr_config fconfig;
@@ -7005,7 +7014,7 @@ fdb_status fdb_compact_file(fdb_file_handle *fhandle,
 
     status = _fdb_compact_file(handle, new_file, new_bhandle, new_dhandle,
                                new_trie, new_seqtrie, new_seqtree, new_staletree,
-                               marker_bid, clone_docs);
+                               marker_bid, clone_docs, compact_opt);
     LATENCY_STAT_END(fhandle->root->file, FDB_LATENCY_COMPACTS);
 
     return status;
@@ -7020,7 +7029,8 @@ fdb_status _fdb_compact_file(fdb_kvs_handle *handle,
                              struct btree *new_seqtree,
                              struct btree *new_staletree,
                              bid_t marker_bid,
-                             bool clone_docs)
+                             bool clone_docs,
+                             const fdb_compact_opt* compact_opt)
 {
     union wal_flush_items flush_items;
     struct filemgr *old_file;
@@ -7131,12 +7141,12 @@ fdb_status _fdb_compact_file(fdb_kvs_handle *handle,
                                                 new_dhandle, new_bhandle,
                                                 marker_bid,
                                                 handle->last_hdr_bid, seqnum,
-                                                &prob, clone_docs);
+                                                &prob, clone_docs, compact_opt);
         cur_hdr = marker_bid; // Move delta documents from the compaction marker.
     } else {
         fs = _fdb_compact_move_docs(handle, new_file, new_trie, new_idtree,
                                     target_seqtree, new_staletree, new_dhandle,
-                                    new_bhandle, &prob, clone_docs);
+                                    new_bhandle, &prob, clone_docs, compact_opt);
     }
 
     if (fs != FDB_RESULT_SUCCESS) {
@@ -7353,7 +7363,8 @@ static fdb_status _fdb_compact(fdb_file_handle *fhandle,
                                const char *new_filename,
                                fdb_snapshot_marker_t marker,
                                bool clone_docs,
-                               const fdb_encryption_key *new_encryption_key)
+                               const fdb_encryption_key *new_encryption_key,
+                               const fdb_compact_opt* opt)
 {
     if (!fhandle || !fhandle->root) {
         return FDB_RESULT_INVALID_HANDLE;
@@ -7376,7 +7387,7 @@ static fdb_status _fdb_compact(fdb_file_handle *fhandle,
             new_filename = nextfile;
         }
         fs = fdb_compact_file(fhandle, new_filename, in_place_compaction,
-                              (bid_t)marker, clone_docs, new_encryption_key);
+                              (bid_t)marker, clone_docs, new_encryption_key, opt);
     } else { // auto compaction mode.
         bool ret;
         // set compaction flag
@@ -7389,7 +7400,7 @@ static fdb_status _fdb_compact(fdb_file_handle *fhandle,
         // get next filename
         compactor_get_next_filename(handle->file->filename, nextfile);
         fs = fdb_compact_file(fhandle, nextfile, in_place_compaction,
-                              (bid_t)marker, clone_docs, new_encryption_key);
+                              (bid_t)marker, clone_docs, new_encryption_key, opt);
         // clear compaction flag
         ret = compactor_switch_compaction_flag(handle->file, false);
         (void)ret;
@@ -7402,14 +7413,22 @@ LIBFDB_API
 fdb_status fdb_compact(fdb_file_handle *fhandle,
                        const char *new_filename)
 {
-    return _fdb_compact(fhandle, new_filename, BLK_NOT_FOUND, false, NULL);
+    return _fdb_compact(fhandle, new_filename, BLK_NOT_FOUND, false, NULL, NULL);
+}
+
+LIBFDB_API
+fdb_status fdb_compact_ex(fdb_file_handle* fhandle,
+                          const char* new_filename,
+                          const fdb_compact_opt* opt)
+{
+    return _fdb_compact(fhandle, new_filename, BLK_NOT_FOUND, false, NULL, opt);
 }
 
 LIBFDB_API
 fdb_status fdb_compact_with_cow(fdb_file_handle *fhandle,
                                 const char *new_filename)
 {
-    return _fdb_compact(fhandle, new_filename, BLK_NOT_FOUND, true, NULL);
+    return _fdb_compact(fhandle, new_filename, BLK_NOT_FOUND, true, NULL, NULL);
 }
 
 LIBFDB_API
@@ -7417,7 +7436,7 @@ fdb_status fdb_compact_upto(fdb_file_handle *fhandle,
                             const char *new_filename,
                             fdb_snapshot_marker_t marker)
 {
-    return _fdb_compact(fhandle, new_filename, marker, false, NULL);
+    return _fdb_compact(fhandle, new_filename, marker, false, NULL, NULL);
 }
 
 LIBFDB_API
@@ -7425,14 +7444,14 @@ fdb_status fdb_compact_upto_with_cow(fdb_file_handle *fhandle,
                                   const char *new_filename,
                                   fdb_snapshot_marker_t marker)
 {
-    return _fdb_compact(fhandle, new_filename, marker, true, NULL);
+    return _fdb_compact(fhandle, new_filename, marker, true, NULL, NULL);
 }
 
 LIBFDB_API
 fdb_status fdb_rekey(fdb_file_handle *fhandle,
                      fdb_encryption_key new_key)
 {
-    return _fdb_compact(fhandle, NULL, BLK_NOT_FOUND, false, &new_key);
+    return _fdb_compact(fhandle, NULL, BLK_NOT_FOUND, false, &new_key, NULL);
 }
 
 LIBFDB_API

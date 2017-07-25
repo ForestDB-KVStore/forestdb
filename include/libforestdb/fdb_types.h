@@ -219,7 +219,7 @@ typedef struct fdb_doc_struct {
     /**
      * Flags for miscellaneous doc properties.
      */
-     uint32_t flags;
+    uint32_t flags;
     /**
      * Use the seqnum set by user instead of auto-generating.
      */
@@ -272,6 +272,33 @@ typedef fdb_compact_decision (*fdb_compaction_callback)(
                                uint64_t last_oldfile_offset,
                                uint64_t last_newfile_offset,
                                void *ctx);
+
+/**
+ * Order of document migration from old file to new file during compaction.
+ *
+ * SORT_BY_OFFSET: Documents are moved in a mutation order. Fast compaction
+ *                 under DGM situation.
+ * SORT_BY_KEY: Documents are moved in a key order. Keys will be sorted
+ *              after compaction is done. Compaction will be slow under DGM,
+ *              but range query performance will be good after compaction.
+ *
+ * Default: SORT_BY_OFFSET
+ */
+typedef int fdb_compact_sort_order;
+enum {
+    FDB_COMPACT_SORT_BY_OFFSET = 0x0,
+    FDB_COMPACT_SORT_BY_KEY    = 0x1
+};
+
+/**
+ * Additional options for compaction.
+ */
+typedef struct fdb_compact_opt_struct {
+    /**
+     * Order of documents in new file after compaction.
+     */
+    fdb_compact_sort_order sort_order;
+} fdb_compact_opt;
 
 /**
   * Encryption algorithms known to ForestDB.

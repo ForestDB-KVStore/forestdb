@@ -646,6 +646,20 @@ fdb_status fdb_iterator_close(fdb_iterator *iterator);
 LIBFDB_API
 fdb_status fdb_compact(fdb_file_handle *fhandle,
                        const char *new_filename);
+
+/**
+ * Do compaction with additional options.
+ *
+ * @param fhandle Pointer to ForestDB file handle.
+ * @param new_filename Name of a new compacted file.
+ * @param opt Additional options.
+ * @return FDB_RESULT_SUCCESS on success.
+ */
+LIBFDB_API
+fdb_status fdb_compact_ex(fdb_file_handle* fhandle,
+                          const char* new_filename,
+                          const fdb_compact_opt* opt);
+
 /**
  * Compact the database file by sharing valid document blocks from
  * the old file.
