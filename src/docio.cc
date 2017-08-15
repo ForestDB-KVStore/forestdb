@@ -576,7 +576,7 @@ INLINE bid_t _docio_append_doc(struct docio_handle *handle, struct docio_object 
 #endif
 
     doc->length = length;
-    buf = (void *)malloc(docsize);
+    buf = (void *)calloc(1, docsize);
 
     _length = _docio_length_encode(length);
 

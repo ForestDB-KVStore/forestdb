@@ -254,9 +254,10 @@ static void * _filemgr_get_temp_buf()
     } else {
         void *addr = NULL;
 
-        malloc_align(addr, FDB_SECTOR_SIZE,
-                     global_config.blocksize + sizeof(struct temp_buf_item));
-
+        size_t alloc_size = global_config.blocksize
+                            + sizeof(struct temp_buf_item);
+        malloc_align(addr, FDB_SECTOR_SIZE, alloc_size);
+        memset(addr, 0x0, alloc_size);
         item = (struct temp_buf_item *)((uint8_t *) addr + global_config.blocksize);
         item->addr = addr;
     }
