@@ -235,6 +235,17 @@ target_link_libraries(forestdb ${PTHREAD_LIB} ${LIBM} ${SNAPPY_LIBRARIES}
                       ${CRYPTO_LIB}
                       ${DL_LIBRARIES} ${BREAKPAD_LIBRARIES})
 
+add_library(static_lib
+            ${FORESTDB_FILE_OPS}
+            ${GETTIMEOFDAY_VS}
+            ${FORESTDB_CORE_SRC}
+            ${FORESTDB_UTILS_SRC})
+target_link_libraries(static_lib ${PTHREAD_LIB} ${LIBM} ${SNAPPY_LIBRARIES}
+                      ${ASYNC_IO_LIB} ${MALLOC_LIBRARIES} ${LIBRT}
+                      ${CRYPTO_LIB}
+                      ${DL_LIBRARIES} ${BREAKPAD_LIBRARIES})
+set_target_properties(static_lib PROPERTIES OUTPUT_NAME forestdb CLEAN_DIRECT_OUTPUT 1)
+					  
 # Create objects libraries for the different "tools" parts forestdb, which can be reused
 # by various targets.
 add_library(FDB_TOOLS_CORE OBJECT ${FORESTDB_CORE_SRC})
