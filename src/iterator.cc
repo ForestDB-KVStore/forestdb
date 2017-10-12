@@ -1246,6 +1246,77 @@ fdb_status fdb_iterator_seek(fdb_iterator *iterator,
 }
 
 LIBFDB_API
+fdb_status fdb_iterator_seek_byseq(fdb_iterator* iterator,
+                                   const fdb_seqnum_t seqnum,
+                                   const fdb_iterator_seek_opt_t seek_pref)
+{
+    if (!iterator || !iterator->handle) return FDB_RESULT_INVALID_HANDLE;
+    if (iterator->_key || seqnum == SEQNUM_NOT_USED) return FDB_RESULT_INVALID_ARGS;
+
+    iterator->direction = FDB_ITR_DIR_NONE;
+    iterator->status = FDB_ITR_IDX;
+    iterator->_seqnum = seqnum;
+
+    fdb_seqnum_t _seq = _endian_encode(seqnum);
+    if (iterator->handle->kvs) {
+        // create an iterator handle for hb-trie
+        uint8_t *end_seq_kv = alca(uint8_t, sizeof(size_t)*2);
+        fdb_kvs_id_t _kv_id = _endian_encode(iterator->handle->kvs->id);
+        memcpy(end_seq_kv, &_kv_id, sizeof(_kv_id));
+        memcpy(end_seq_kv + sizeof(size_t), &_seq, sizeof(_seq));
+
+        // reset HB+trie's seqtrie iterator using end_seq_kv
+        hbtrie_iterator_free(iterator->seqtrie_iterator);
+        hbtrie_iterator_init(iterator->handle->seqtrie,
+                             iterator->seqtrie_iterator,
+                             end_seq_kv, sizeof(size_t)*2);
+    } else {
+        // reset Btree iterator to end_seqnum
+        btree_iterator_free(iterator->seqtree_iterator);
+        // create an iterator handle for b-tree
+        btree_iterator_init(iterator->handle->seqtree,
+                            iterator->seqtree_iterator,
+                            (void *)&_seq);
+    }
+
+    struct wal_item query;
+    struct wal_item_header query_key;
+    size_t size_seq = sizeof(fdb_seqnum_t);
+    size_t size_chunk = iterator->handle->config.chunksize;
+    uint8_t *end_seq_kv = alca(uint8_t, size_chunk + size_seq);
+    if (iterator->handle->kvs) {
+        query_key.key = end_seq_kv;
+        kvid2buf(size_chunk, iterator->handle->kvs->id, end_seq_kv);
+        memcpy(end_seq_kv + size_chunk, &_seq, size_seq);
+        query_key.keylen = size_chunk + size_seq;
+    } else {
+        query_key.key = (void *) NULL;
+        query_key.keylen = 0;
+    }
+    query.header = &query_key;
+    query.seqnum = seqnum;
+
+    // reset WAL tree cursor using search because of the sharded WAL
+    iterator->tree_cursor = wal_itr_search_greater(iterator->wal_itr, &query);
+
+    if (iterator->tree_cursor) {
+        // If WAL tree has an entry, skip Main index for reverse iteration..
+        iterator->_offset = iterator->tree_cursor->offset;
+    } else {
+        iterator->_offset = BLK_NOT_FOUND; // fetch from main index
+    }
+
+    iterator->tree_cursor_prev = iterator->tree_cursor;
+    if (seek_pref == FDB_ITR_SEEK_HIGHER) {
+        return fdb_iterator_next(iterator);
+    } else {
+        iterator->status = FDB_ITR_WAL;
+        return fdb_iterator_prev(iterator);
+    }
+}
+
+
+LIBFDB_API
 fdb_status fdb_iterator_seek_to_min(fdb_iterator *iterator)
 {
     if (!iterator || !iterator->handle) {

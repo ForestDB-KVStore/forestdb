@@ -580,6 +580,22 @@ fdb_status fdb_iterator_seek(fdb_iterator *iterator, const void *seek_key,
                              const fdb_iterator_seek_opt_t direction);
 
 /**
+ * Fast forward / backward an iterator to return documents starting from
+ * the given seqnum. If the seqnum does not exist, the iterator is
+ * positioned to start from the next/prev seqnum, upon the option `seek_perf`.
+ *
+ * @param iterator Pointer to the iterator.
+ * @param seek_key Seqnum to seek to.
+ * @param direction Specifies which key to return if seek_key does not exist.
+ *        Default value of 0 indicates FDB_ITR_SEEK_HIGHER
+ * @return FDB_RESULT_SUCCESS on success.
+ */
+LIBFDB_API
+fdb_status fdb_iterator_seek_byseq(fdb_iterator* iterator,
+                                   const fdb_seqnum_t seqnum,
+                                   const fdb_iterator_seek_opt_t seek_pref);
+
+/**
  * Rewind an iterator to position at the smallest key of the iteration.
  *
  * @param iterator Pointer to the iterator.
