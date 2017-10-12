@@ -1387,13 +1387,13 @@ fdb_status _fdb_iterator_seek_to_max_seq(fdb_iterator *iterator) {
     iterator->direction = FDB_ITR_REVERSE; // only reverse iteration possible
     iterator->_seqnum = iterator->end_seqnum;
 
+    fdb_seqnum_t _seq = _endian_encode(iterator->end_seqnum);
     if (iterator->handle->kvs) {
         // create an iterator handle for hb-trie
         uint8_t *end_seq_kv = alca(uint8_t, sizeof(size_t)*2);
         fdb_kvs_id_t _kv_id = _endian_encode(iterator->handle->kvs->id);
-        memcpy(end_seq_kv, &_kv_id, sizeof(size_t));
-        memcpy(end_seq_kv + sizeof(size_t), &iterator->end_seqnum,
-                sizeof(size_t));
+        memcpy(end_seq_kv, &_kv_id, sizeof(_kv_id));
+        memcpy(end_seq_kv + sizeof(size_t), &_seq, sizeof(_seq));
 
         // reset HB+trie's seqtrie iterator using end_seq_kv
         hbtrie_iterator_free(iterator->seqtrie_iterator);
@@ -1406,7 +1406,7 @@ fdb_status _fdb_iterator_seek_to_max_seq(fdb_iterator *iterator) {
         // create an iterator handle for b-tree
         btree_iterator_init(iterator->handle->seqtree,
                             iterator->seqtree_iterator,
-                            (void *)(&iterator->end_seqnum));
+                            (void *)&_seq);
     }
 
     if (iterator->end_seqnum != SEQNUM_NOT_USED) {
@@ -1418,7 +1418,7 @@ fdb_status _fdb_iterator_seek_to_max_seq(fdb_iterator *iterator) {
         if (iterator->handle->kvs) {
             query_key.key = end_seq_kv;
             kvid2buf(size_chunk, iterator->handle->kvs->id, end_seq_kv);
-            memcpy(end_seq_kv + size_chunk, &iterator->end_seqnum, size_seq);
+            memcpy(end_seq_kv + size_chunk, &_seq, size_seq);
             query_key.keylen = size_chunk + size_seq;
         } else {
             query_key.key = (void *) NULL;

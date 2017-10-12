@@ -4167,7 +4167,6 @@ void iterator_seek_to_max_key_with_deletes_test() {
     fdb_iterator *it = nullptr;
     fdb_doc *rdoc = nullptr;
 
-
     fdb_config fconfig = fdb_get_default_config();
     fdb_kvs_config kvs_config = fdb_get_default_kvs_config();
 
@@ -4257,7 +4256,7 @@ void iterator_seek_to_min_key_with_deletes_test() {
 
     memleak_end();
 
-    TEST_RESULT("iterator seek to max test");
+    TEST_RESULT("iterator seek to min test");
 }
 int main(){
     iterator_test();
