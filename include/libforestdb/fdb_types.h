@@ -555,6 +555,10 @@ enum {
      */
     FDB_ITR_NONE = 0x00,
     /**
+     * Return all operations for duplicate and deleted keys.
+     */
+    FDB_ITR_ALL_OP = 0x01,
+    /**
      * Return only non-deleted items through iterator.
      */
     FDB_ITR_NO_DELETES = 0x02,

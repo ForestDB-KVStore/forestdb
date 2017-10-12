@@ -1838,8 +1838,10 @@ fdb_status wal_dur_snapshot_open(fdb_seqnum_t seqnum,
     return FDB_RESULT_SUCCESS;
 }
 
-fdb_status wal_snap_insert(struct snap_handle *shandle, fdb_doc *doc,
-                           uint64_t offset)
+fdb_status wal_snap_insert(struct snap_handle *shandle,
+                           fdb_doc *doc,
+                           uint64_t offset,
+                           wal_item_action action)
 {
     struct wal_item query;
     struct wal_item_header query_hdr;
@@ -1857,15 +1859,7 @@ fdb_status wal_snap_insert(struct snap_handle *shandle, fdb_doc *doc,
         item->header->key = doc->key;
         item->header->keylen = doc->keylen;
         item->seqnum = doc->seqnum;
-        if (doc->deleted) {
-            if (!offset) { // deleted item can never be at offset 0
-                item->action = WAL_ACT_REMOVE; // must be a purged item
-            } else {
-                item->action = WAL_ACT_LOGICAL_REMOVE;
-            }
-        } else {
-            item->action = WAL_ACT_INSERT;
-        }
+        item->action = action;
         item->offset = offset;
         avl_insert(&shandle->key_tree, &item->avl_keysnap, _snap_cmp_bykey);
         avl_insert(&shandle->seq_tree, &item->avl_seq, _wal_cmp_byseq);
@@ -1934,7 +1928,6 @@ fdb_status wal_copyto_snapshot(struct filemgr *file,
             }
             ee = list_begin(&header->items);
             while (ee) {
-                uint64_t offset;
                 item = _get_entry(ee, struct wal_item, list_elem);
                 // Skip any uncommitted item, if not part of either global or
                 // the current transaction
@@ -1963,13 +1956,7 @@ fdb_status wal_copyto_snapshot(struct filemgr *file,
                 doc.seqnum = item->seqnum;
                 doc.deleted = (item->action == WAL_ACT_LOGICAL_REMOVE ||
                                item->action == WAL_ACT_REMOVE);
-                if (item->action == WAL_ACT_REMOVE) {
-                    offset = 0;
-                } else {
-                    offset = item->offset;
-                }
-
-                wal_snap_insert(shandle, &doc, offset);
+                wal_snap_insert(shandle, &doc, item->offset, item->action);
                 break; // We just require a single latest copy in the snapshot
             }
             a = avl_next(a);

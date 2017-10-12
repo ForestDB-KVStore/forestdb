@@ -1556,8 +1556,9 @@ start_seq:
         uint8_t drop_logical_deletes =
             (snap_item->action == WAL_ACT_LOGICAL_REMOVE) &&
             (iterator->opt & FDB_ITR_NO_DELETES);
-        if (snap_item->action == WAL_ACT_REMOVE ||
-                drop_logical_deletes) {
+        if ( !(iterator->opt & FDB_ITR_ALL_OP) &&
+               (snap_item->action == WAL_ACT_REMOVE ||
+                drop_logical_deletes) ) {
             if (br == BTREE_RESULT_FAIL && !iterator->tree_cursor) {
                 return FDB_RESULT_ITERATOR_FAIL;
             }
@@ -1574,7 +1575,7 @@ start_seq:
     // To prevent returning duplicate items from sequence iterator, only return
     // those b-tree items that exist in HB-trie but not WAL
     // (WAL items should have already been returned in reverse iteration)
-    if (br == BTREE_RESULT_SUCCESS) {
+    if (!(iterator->opt & FDB_ITR_ALL_OP) && br == BTREE_RESULT_SUCCESS) {
         fdb_doc doc_kv;
         _doc.key = NULL;
         _doc.length.keylen = 0;
@@ -1735,8 +1736,9 @@ start_seq:
                 uint8_t drop_logical_deletes =
                     (snap_item->action == WAL_ACT_LOGICAL_REMOVE) &&
                     (iterator->opt & FDB_ITR_NO_DELETES);
-                if (snap_item->action == WAL_ACT_REMOVE ||
-                    drop_logical_deletes) {
+                if ( !(iterator->opt & FDB_ITR_ALL_OP) &&
+                      (snap_item->action == WAL_ACT_REMOVE ||
+                       drop_logical_deletes) ) {
                     if (br == BTREE_RESULT_FAIL && !iterator->tree_cursor) {
                         return FDB_RESULT_ITERATOR_FAIL;
                     }
@@ -1762,7 +1764,7 @@ start_seq:
 
     // To prevent returning duplicate items from sequence iterator, only return
     // those b-tree items that exist in HB-trie but not WAL (visit WAL later)
-    if (br == BTREE_RESULT_SUCCESS) {
+    if (!(iterator->opt & FDB_ITR_ALL_OP) && br == BTREE_RESULT_SUCCESS) {
         _doc.key = NULL;
         _doc.length.keylen = 0;
         _doc.meta = NULL;

@@ -401,9 +401,12 @@ fdb_status snap_get_stat(struct snap_handle *shandle, struct kvs_stat *stat);
  * @param shandle - the WAL snapshot handle
  * @param doc - the immutable document to be inserted into the snapshot
  * @param offset - offset of the immutable doc
+ * @param action - action for the doc
  */
-fdb_status wal_snap_insert(struct snap_handle *shandle, fdb_doc *doc,
-                           uint64_t offset);
+fdb_status wal_snap_insert(struct snap_handle *shandle,
+                           fdb_doc *doc,
+                           uint64_t offset,
+                           wal_item_action action);
 /**
  * Initialize a WAL iterator snapshot by creating a barrier to future writes
  * @param file - underlying ForestDB database file shared by all KV Stores

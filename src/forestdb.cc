@@ -498,20 +498,22 @@ INLINE void _fdb_restore_wal(fdb_kvs_handle *handle,
                             if (doc.key) free(doc.key);
                         } else {
                             // snapshot
+                            wal_item_action action = WAL_ACT_INSERT;
+                            if (wal_doc.deleted) action = WAL_ACT_REMOVE;
                             if (handle->kvs) {
                                 fdb_kvs_id_t kv_id;
                                 buf2kvid(handle->config.chunksize,
                                          wal_doc.key, &kv_id);
                                 if (kv_id == handle->kvs->id) {
                                     // snapshot: insert ID matched documents only
-                                    wal_snap_insert(handle->shandle,
-                                                    &wal_doc, doc_offset);
+                                    wal_snap_insert(handle->shandle, &wal_doc,
+                                                    doc_offset, action);
                                 } else {
                                     free(doc.key);
                                 }
                             } else {
                                 wal_snap_insert(handle->shandle, &wal_doc,
-                                                doc_offset);
+                                                doc_offset, action);
                             }
                         }
                         free(doc.meta);
