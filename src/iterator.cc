@@ -1315,21 +1315,17 @@ fdb_status fdb_iterator_seek_byseq(fdb_iterator* iterator,
     }
 }
 
+fdb_status _fdb_iterator_seek_to_min_seq(fdb_iterator *iterator) {
+    return fdb_iterator_seek_byseq(iterator, 0, FDB_ITR_SEEK_HIGHER);
+}
 
-LIBFDB_API
-fdb_status fdb_iterator_seek_to_min(fdb_iterator *iterator)
-{
-    if (!iterator || !iterator->handle) {
-        return FDB_RESULT_INVALID_HANDLE;
-    }
-
+fdb_status _fdb_iterator_seek_to_min_key(fdb_iterator *iterator) {
     if (!iterator->_key) {
         return FDB_RESULT_INVALID_ARGS;
     }
 
     size_t size_chunk = iterator->handle->config.chunksize;
     fdb_status ret;
-    LATENCY_STAT_START();
 
     // Initialize direction iteration to FORWARD just in case this function was
     // called right after fdb_iterator_init() so the cursor gets positioned
@@ -1369,6 +1365,23 @@ fdb_status fdb_iterator_seek_to_min(fdb_iterator *iterator)
     }
 
     ret = fdb_iterator_next(iterator);
+    return ret;
+}
+
+LIBFDB_API
+fdb_status fdb_iterator_seek_to_min(fdb_iterator *iterator) {
+    if (!iterator || !iterator->handle) {
+        return FDB_RESULT_INVALID_HANDLE;
+    }
+
+    fdb_status ret;
+    LATENCY_STAT_START();
+
+    if (!iterator->hbtrie_iterator) {
+        ret = _fdb_iterator_seek_to_min_seq(iterator);
+    } else {
+        ret = _fdb_iterator_seek_to_min_key(iterator);
+    }
     LATENCY_STAT_END(iterator->handle->file, FDB_LATENCY_ITR_SEEK_MIN);
     return ret;
 }
