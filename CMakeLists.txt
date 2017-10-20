@@ -81,7 +81,7 @@ else(COUCHBASE_SERVER_BUILD)
     endif(_JEMALLOC EQUAL 1)
 endif(COUCHBASE_SERVER_BUILD)
 
-INCLUDE(FindAsyncIOLib)
+#INCLUDE(FindAsyncIOLib)
 
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "RelWithDebInfo" CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE)
