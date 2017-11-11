@@ -1257,13 +1257,14 @@ fdb_status fdb_iterator_seek_byseq(fdb_iterator* iterator,
     iterator->status = FDB_ITR_IDX;
     iterator->_seqnum = seqnum;
 
+    size_t size_seq = sizeof(fdb_seqnum_t);
+    size_t size_chunk = iterator->handle->config.chunksize;
+    uint8_t *end_seq_kv = alca(uint8_t, size_chunk + size_seq);
     fdb_seqnum_t _seq = _endian_encode(seqnum);
     if (iterator->handle->kvs) {
         // create an iterator handle for hb-trie
-        uint8_t *end_seq_kv = alca(uint8_t, sizeof(size_t)*2);
-        fdb_kvs_id_t _kv_id = _endian_encode(iterator->handle->kvs->id);
-        memcpy(end_seq_kv, &_kv_id, sizeof(_kv_id));
-        memcpy(end_seq_kv + sizeof(size_t), &_seq, sizeof(_seq));
+        kvid2buf(size_chunk, iterator->handle->kvs->id, end_seq_kv);
+        memcpy(end_seq_kv + size_chunk, &_seq, size_seq);
 
         // reset HB+trie's seqtrie iterator using end_seq_kv
         hbtrie_iterator_free(iterator->seqtrie_iterator);
@@ -1281,9 +1282,6 @@ fdb_status fdb_iterator_seek_byseq(fdb_iterator* iterator,
 
     struct wal_item query;
     struct wal_item_header query_key;
-    size_t size_seq = sizeof(fdb_seqnum_t);
-    size_t size_chunk = iterator->handle->config.chunksize;
-    uint8_t *end_seq_kv = alca(uint8_t, size_chunk + size_seq);
     if (iterator->handle->kvs) {
         query_key.key = end_seq_kv;
         kvid2buf(size_chunk, iterator->handle->kvs->id, end_seq_kv);
@@ -1316,7 +1314,9 @@ fdb_status fdb_iterator_seek_byseq(fdb_iterator* iterator,
 }
 
 fdb_status _fdb_iterator_seek_to_min_seq(fdb_iterator *iterator) {
-    return fdb_iterator_seek_byseq(iterator, 0, FDB_ITR_SEEK_HIGHER);
+    return fdb_iterator_seek_byseq(iterator,
+                                   iterator->start_seqnum,
+                                   FDB_ITR_SEEK_HIGHER);
 }
 
 fdb_status _fdb_iterator_seek_to_min_key(fdb_iterator *iterator) {
@@ -1471,13 +1471,14 @@ fdb_status _fdb_iterator_seek_to_max_seq(fdb_iterator *iterator) {
     iterator->direction = FDB_ITR_REVERSE; // only reverse iteration possible
     iterator->_seqnum = iterator->end_seqnum;
 
+    size_t size_seq = sizeof(fdb_seqnum_t);
+    size_t size_chunk = iterator->handle->config.chunksize;
+    uint8_t *end_seq_kv = alca(uint8_t, size_chunk + size_seq);
     fdb_seqnum_t _seq = _endian_encode(iterator->end_seqnum);
     if (iterator->handle->kvs) {
         // create an iterator handle for hb-trie
-        uint8_t *end_seq_kv = alca(uint8_t, sizeof(size_t)*2);
-        fdb_kvs_id_t _kv_id = _endian_encode(iterator->handle->kvs->id);
-        memcpy(end_seq_kv, &_kv_id, sizeof(_kv_id));
-        memcpy(end_seq_kv + sizeof(size_t), &_seq, sizeof(_seq));
+        kvid2buf(size_chunk, iterator->handle->kvs->id, end_seq_kv);
+        memcpy(end_seq_kv + size_chunk, &_seq, size_seq);
 
         // reset HB+trie's seqtrie iterator using end_seq_kv
         hbtrie_iterator_free(iterator->seqtrie_iterator);
@@ -1496,9 +1497,6 @@ fdb_status _fdb_iterator_seek_to_max_seq(fdb_iterator *iterator) {
     if (iterator->end_seqnum != SEQNUM_NOT_USED) {
         struct wal_item query;
         struct wal_item_header query_key;
-        size_t size_seq = sizeof(fdb_seqnum_t);
-        size_t size_chunk = iterator->handle->config.chunksize;
-        uint8_t *end_seq_kv = alca(uint8_t, size_chunk + size_seq);
         if (iterator->handle->kvs) {
             query_key.key = end_seq_kv;
             kvid2buf(size_chunk, iterator->handle->kvs->id, end_seq_kv);
