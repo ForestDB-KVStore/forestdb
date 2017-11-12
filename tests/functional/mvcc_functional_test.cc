@@ -2253,7 +2253,7 @@ void snapshot_markers_in_file_test(bool multi_kv)
     } else {
         TEST_CHK(num_markers == 8);
         for (r = 0; r < num_kvs; ++r) {
-            TEST_CHK(markers[r].num_kvs_markers == num_kvs);
+            TEST_CHK(markers[r].num_kvs_markers == num_kvs+1);
             for (i = 0; i < num_kvs; ++i) {
                 TEST_CHK(markers[r].kvs_markers[i].seqnum
                          == (fdb_seqnum_t)(n - r*5));
@@ -2361,7 +2361,7 @@ void snapshot_without_seqtree(bool multi_kv)
     } else {
         TEST_CHK(num_markers == 6);
         for (r = 0; r < num_kvs; ++r) {
-            TEST_CHK(markers[r].num_kvs_markers == num_kvs);
+            TEST_CHK(markers[r].num_kvs_markers == num_kvs+1);
             for (i = 0; i < num_kvs; ++i) {
                 TEST_CHK(markers[r].kvs_markers[i].seqnum
                          == (fdb_seqnum_t) (n * (num_commits - r)));

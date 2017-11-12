@@ -1037,7 +1037,7 @@ void compact_upto_test(bool multi_kv)
     } else {
         TEST_CHK(num_markers == 8);
         for (r = 0; r < num_kvs; ++r) {
-            TEST_CHK(markers[r].num_kvs_markers == num_kvs);
+            TEST_CHK(markers[r].num_kvs_markers == num_kvs+1);
             for (i = 0; i < num_kvs; ++i) {
                 TEST_CHK(markers[r].kvs_markers[i].seqnum
                          == (fdb_seqnum_t)(n - r*5));
@@ -3107,13 +3107,16 @@ static int compaction_cb_markers(fdb_file_handle *fhandle,
     // get snap markers
     s = fdb_get_all_snap_markers(fhandle, &markers, &num_markers);
     TEST_CHK(s == FDB_RESULT_SUCCESS);
-    TEST_CHK(markers[0].num_kvs_markers == 5);
+    TEST_CHK(markers[0].num_kvs_markers == 6);
     seqno = markers[0].kvs_markers[0].seqnum;
     TEST_CHK(seqno == n);
 
     // snapshot open for each kvs for each marker
     for(j=0;j<num_markers;++j){
         for (i=0;i<(uint64_t)markers[j].num_kvs_markers;++i){
+            // Skip default KVS.
+            if (!markers[j].kvs_markers[i].kv_store_name) continue;
+
             // open kv for this marker
             fdb_kvs_open(fhandle, &db,
                          markers[j].kvs_markers[i].kv_store_name, &kvs_config);
