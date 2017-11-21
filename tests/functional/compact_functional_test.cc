@@ -1961,12 +1961,14 @@ void auto_compaction_with_concurrent_insert_test(size_t t_limit)
 
 // lexicographically compares two variable-length binary streams
 #define MIN(a,b) (((a)<(b))?(a):(b))
-static int _compact_test_keycmp(void *key1, size_t keylen1,
-                                void *key2, size_t keylen2)
+static int _compact_test_keycmp(void* key1, size_t keylen1,
+                                void* key2, size_t keylen2,
+                                void* user_param)
 {
+    (void)user_param;
     if (keylen1 == keylen2) {
         return memcmp(key1, key2, keylen1);
-    }else {
+    } else {
         size_t len = MIN(keylen1, keylen2);
         int cmp = memcmp(key1, key2, len);
         if (cmp != 0) return cmp;

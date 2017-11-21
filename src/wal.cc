@@ -81,11 +81,13 @@ INLINE int __wal_cmp_bykey(struct wal_item_header *aa,
                             (uint8_t*)aa->key + size_chunk,
                             aa->keylen - size_chunk,
                             (uint8_t*)bb->key + size_chunk,
-                            bb->keylen - size_chunk);
+                            bb->keylen - size_chunk,
+                            info->kvs_config.custom_cmp_param);
             }
         } else {
             return info->kvs_config.custom_cmp(aa->key, aa->keylen,
-                                               bb->key, bb->keylen);
+                                               bb->key, bb->keylen,
+                                               info->kvs_config.custom_cmp_param);
         }
     } else {
         return _wal_keycmp(aa->key, aa->keylen, bb->key, bb->keylen);

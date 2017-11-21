@@ -110,6 +110,7 @@ fdb_kvs_config get_default_kvs_config(void) {
     kvs_config.create_if_missing = true;
     // lexicographical key order by default
     kvs_config.custom_cmp = NULL;
+    kvs_config.custom_cmp_param = NULL;
 
     return kvs_config;
 }

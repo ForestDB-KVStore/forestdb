@@ -32,7 +32,11 @@ extern "C" {
 typedef size_t hbtrie_func_readkey(void *handle, uint64_t offset, void *buf);
 typedef int hbtrie_cmp_func(void *key1, void *key2, void* aux);
 // a function pointer to a routine that returns a function pointer
-typedef hbtrie_cmp_func *hbtrie_cmp_map(void *chunk, void *aux);
+typedef void hbtrie_cmp_map(void* chunk,
+                                void* aux,
+                                hbtrie_cmp_func** func_out,
+                                void** param_out);
+
 
 typedef enum {
     /**
@@ -129,6 +133,7 @@ void hbtrie_set_leaf_height_limit(struct hbtrie *trie, uint8_t limit);
 void hbtrie_set_leaf_cmp(struct hbtrie *trie, btree_cmp_func *cmp);
 void hbtrie_set_map_function(struct hbtrie *trie,
                              hbtrie_cmp_map *map_func);
+hbtrie_cmp_map* hbtrie_get_map_function(struct hbtrie* trie);
 
 hbtrie_result hbtrie_iterator_init(struct hbtrie *trie,
                                    struct hbtrie_iterator *it,

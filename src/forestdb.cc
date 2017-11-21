@@ -139,7 +139,7 @@ int _fdb_custom_cmp_wrap(void *key1, void *key2, void *aux)
     uint8_t *keystr2 = alca(uint8_t, FDB_MAX_KEYLEN_INTERNAL);
     size_t keylen1, keylen2;
     btree_cmp_args *args = (btree_cmp_args *)aux;
-    fdb_custom_cmp_variable cmp = (fdb_custom_cmp_variable)args->aux;
+    fdb_custom_cmp_variable cmp = (fdb_custom_cmp_variable)args->cmp_func;
 
     is_key1_inf = _is_inf_key(key1);
     is_key2_inf = _is_inf_key(key2);
@@ -162,7 +162,7 @@ int _fdb_custom_cmp_wrap(void *key1, void *key2, void *aux)
         return 1;
     }
 
-    return cmp(keystr1, keylen1, keystr2, keylen2);
+    return cmp(keystr1, keylen1, keystr2, keylen2, args->user_param);
 }
 
 void fdb_fetch_header(uint64_t version,
@@ -6750,7 +6750,7 @@ static fdb_status _fdb_reset(fdb_kvs_handle *handle, fdb_kvs_handle *handle_in)
     // set aux
     new_trie->flag = handle->trie->flag;
     new_trie->leaf_height_limit = handle->trie->leaf_height_limit;
-    new_trie->map = handle->trie->map;
+    hbtrie_set_map_function(new_trie, hbtrie_get_map_function(handle->trie));
 
     if (handle->config.seqtree_opt == FDB_SEQTREE_USE) {
         // if we use sequence number tree
@@ -6971,7 +6971,7 @@ fdb_status fdb_compact_file(fdb_file_handle *fhandle,
     // set aux
     new_trie->flag = handle->trie->flag;
     new_trie->leaf_height_limit = handle->trie->leaf_height_limit;
-    new_trie->map = handle->trie->map;
+    hbtrie_set_map_function(new_trie, hbtrie_get_map_function(handle->trie));
 
     if (handle->config.seqtree_opt == FDB_SEQTREE_USE) {
         // if we use sequence number tree

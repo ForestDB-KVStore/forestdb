@@ -86,11 +86,13 @@ static int _fdb_key_cmp(fdb_iterator *iterator, void *key1, size_t keylen1,
                 }
                 cmp = iterator->handle->kvs_config.custom_cmp(
                           (uint8_t*)key1 + size_chunk, keylen1 - size_chunk,
-                          (uint8_t*)key2 + size_chunk, keylen2 - size_chunk);
+                          (uint8_t*)key2 + size_chunk, keylen2 - size_chunk,
+                          iterator->handle->kvs_config.custom_cmp_param);
             }
         } else {
-            cmp = iterator->handle->kvs_config.custom_cmp(key1, keylen1,
-                                                       key2, keylen2);
+            cmp = iterator->handle->kvs_config.custom_cmp(
+                      key1, keylen1, key2, keylen2,
+                      iterator->handle->kvs_config.custom_cmp_param);
         }
     } else {
         cmp = _fdb_keycmp(key1, keylen1, key2, keylen2);

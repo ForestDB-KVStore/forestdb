@@ -32,8 +32,11 @@
 
 // lexicographically compares two variable-length binary streams
 #define MIN(a,b) (((a)<(b))?(a):(b))
-static int _multi_kv_test_keycmp(void *key1, size_t keylen1, void *key2, size_t keylen2)
+static int _multi_kv_test_keycmp(void* key1, size_t keylen1,
+                                 void* key2, size_t keylen2,
+                                 void* user_param)
 {
+    (void)user_param;
     if (keylen1 == keylen2) {
         return memcmp(key1, key2, keylen1);
     }else {

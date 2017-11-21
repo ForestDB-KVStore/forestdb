@@ -159,15 +159,12 @@ enum {
 };
 
 /**
- * Pointer type definition of a customized compare function for fixed size key.
- */
-typedef int (*fdb_custom_cmp_fixed)(void *a, void *b);
-
-/**
  * Pointer type definition of a customized compare function for variable length key.
  */
-typedef int (*fdb_custom_cmp_variable)(void *a, size_t len_a,
-                                       void *b, size_t len_b);
+typedef int (*fdb_custom_cmp_variable)(
+            void* a, size_t len_a,
+            void* b, size_t len_b,
+            void* user_param);
 
 typedef uint64_t fdb_seqnum_t;
 #define FDB_SNAPSHOT_INMEM ((fdb_seqnum_t)(-1))
@@ -530,6 +527,10 @@ typedef struct {
      * Customized compare function for an KV store instance.
      */
     fdb_custom_cmp_variable custom_cmp;
+    /**
+     * Parameters that will be passed to each custom cmp function call.
+     */
+    void* custom_cmp_param;
 } fdb_kvs_config;
 
 /**

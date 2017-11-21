@@ -140,7 +140,8 @@ void hbtrie_init(struct hbtrie *trie, int chunksize, int valuelen,
     trie->flag = 0x0;
     trie->leaf_height_limit = 0;
     trie->cmp_args.chunksize = chunksize;
-    trie->cmp_args.aux = NULL;
+    trie->cmp_args.cmp_func = NULL;
+    trie->cmp_args.user_param = NULL;
     trie->aux = &trie->cmp_args;
 
     // assign key-value operations
@@ -198,6 +199,10 @@ void hbtrie_set_map_function(struct hbtrie *trie,
                              hbtrie_cmp_map *map_func)
 {
     trie->map = map_func;
+}
+
+hbtrie_cmp_map* hbtrie_get_map_function(struct hbtrie* trie) {
+    return trie->map;
 }
 
 // IMPORTANT: hbmeta doesn't have own allocated memory space (pointers only)
@@ -543,11 +548,13 @@ static hbtrie_result _hbtrie_prev(struct hbtrie_iterator *it,
                         // do nothing
                     } else {
                         // get cmp function corresponding to the key
-                        void_cmp = trie->map(it->curkey, (void *)trie);
+                        void* user_param;
+                        trie->map(it->curkey, (void *)trie, &void_cmp, &user_param);
                         if (void_cmp) {
                             memcpy(trie->last_map_chunk, it->curkey, trie->chunksize);
                             // set aux for _fdb_custom_cmp_wrap()
-                            trie->cmp_args.aux = void_cmp;
+                            trie->cmp_args.cmp_func = void_cmp;
+                            trie->cmp_args.user_param = user_param;
                             trie->aux = &trie->cmp_args;
                         }
                     }
@@ -840,11 +847,13 @@ static hbtrie_result _hbtrie_next(struct hbtrie_iterator *it,
                         // do nothing
                     } else {
                         // get cmp function corresponding to the key
-                        void_cmp = trie->map(it->curkey, (void *)trie);
+                        void* user_param;
+                        trie->map(it->curkey, (void *)trie, &void_cmp, &user_param);
                         if (void_cmp) {
                             memcpy(trie->last_map_chunk, it->curkey, trie->chunksize);
                             // set aux for _fdb_custom_cmp_wrap()
-                            trie->cmp_args.aux = void_cmp;
+                            trie->cmp_args.cmp_func = void_cmp;
+                            trie->cmp_args.user_param = user_param;
                             trie->aux = &trie->cmp_args;
                         }
                     }
@@ -1167,11 +1176,13 @@ static hbtrie_result _hbtrie_find(struct hbtrie *trie, void *key, int keylen,
             // same custom function was used in the last call .. do nothing
         } else {
             // get cmp function corresponding to the key
-            void_cmp = trie->map(key, (void *)trie);
+            void* user_param;
+            trie->map(key, (void *)trie, &void_cmp, &user_param);
             if (void_cmp) { // custom cmp function matches .. turn on leaf b+tree mode
                 memcpy(trie->last_map_chunk, key, trie->chunksize);
                 // set aux for _fdb_custom_cmp_wrap()
-                trie->cmp_args.aux = void_cmp;
+                trie->cmp_args.cmp_func = void_cmp;
+                trie->cmp_args.user_param = user_param;
                 trie->aux = &trie->cmp_args;
             }
         }
@@ -1687,13 +1698,15 @@ INLINE hbtrie_result _hbtrie_insert(struct hbtrie *trie,
             leaf_cond = 1;
         } else {
             // get cmp function corresponding to the key
-            void_cmp = trie->map(key, (void *)trie);
+            void* user_param;
+            trie->map(key, (void *)trie, &void_cmp, &user_param);
             if (void_cmp) {
                 // custom cmp function matches .. turn on leaf b+tree mode
                 leaf_cond = 1;
                 memcpy(trie->last_map_chunk, key, trie->chunksize);
                 // set aux for _fdb_custom_cmp_wrap()
-                trie->cmp_args.aux = void_cmp;
+                trie->cmp_args.cmp_func = void_cmp;
+                trie->cmp_args.user_param = user_param;
                 trie->aux = &trie->cmp_args;
             }
         }

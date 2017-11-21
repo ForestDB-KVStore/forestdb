@@ -619,6 +619,10 @@ struct kvs_header {
      */
     fdb_custom_cmp_variable default_kvs_cmp;
     /**
+     * Parameters for custom cmp function given by user.
+     */
+    void* default_kvs_cmp_param;
+    /**
      * A tree linking all KV stores in a file by their KV store name.
      */
     struct avl_tree *idx_name;
@@ -665,6 +669,10 @@ struct kvs_node {
      * Custom compare function set by user (in-memory only).
      */
     fdb_custom_cmp_variable custom_cmp;
+    /**
+     * Parameter for custom cmp function given by user (in-memory only).
+     */
+    void* user_param;
     /**
      * Operational CRUD statistics for this KV store (in-memory only).
      */

@@ -106,7 +106,8 @@ void fdb_file_handle_clone_cmp_func_list(fdb_file_handle *fhandle,
                                          struct list *cmp_func_list);
 void fdb_file_handle_add_cmp_func(fdb_file_handle *fhandle,
                                   char *kvs_name,
-                                  fdb_custom_cmp_variable cmp_func);
+                                  fdb_custom_cmp_variable cmp_func,
+                                  void* cmp_func_param);
 void fdb_file_handle_free(fdb_file_handle *fhandle);
 
 void fdb_cmp_func_list_from_filemgr(struct filemgr *file,
@@ -114,7 +115,10 @@ void fdb_cmp_func_list_from_filemgr(struct filemgr *file,
 void fdb_free_cmp_func_list(struct list *cmp_func_list);
 
 fdb_status fdb_kvs_cmp_check(fdb_kvs_handle *handle);
-hbtrie_cmp_func * fdb_kvs_find_cmp_chunk(void *chunk, void *aux);
+void fdb_kvs_find_cmp_chunk(void *chunk,
+                            void *aux,
+                            hbtrie_cmp_func** cmp_func_out,
+                            void** user_param_out);
 
 void fdb_kvs_info_create(fdb_kvs_handle *root_handle,
                          fdb_kvs_handle *handle,

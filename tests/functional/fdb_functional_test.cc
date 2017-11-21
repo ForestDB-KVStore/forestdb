@@ -2351,8 +2351,11 @@ void incomplete_block_test()
 }
 
 
-static int _cmp_double(void *key1, size_t keylen1, void *key2, size_t keylen2)
+static int _cmp_double(void* key1, size_t keylen1,
+                       void* key2, size_t keylen2,
+                       void* user_param)
 {
+    (void)user_param;
     double aa, bb;
 
     if (!keylen1) {
@@ -2488,8 +2491,11 @@ void custom_compare_primitive_test()
     TEST_RESULT("custom compare function for primitive key test");
 }
 
-static int _cmp_variable(void *key1, size_t keylen1, void *key2, size_t keylen2)
+static int _cmp_variable(void* key1, size_t keylen1,
+                         void* key2, size_t keylen2,
+                         void* user_param)
 {
+    assert(user_param);
     if (keylen1 < 6 || keylen2 < 6) {
         return (keylen1 - keylen2);
     }
@@ -2531,7 +2537,9 @@ void custom_compare_variable_test()
     fconfig.compaction_threshold = 0;
     fconfig.multi_kv_instances = true;
 
+    uint64_t user_param = 0x1234;
     kvs_config.custom_cmp = _cmp_variable;
+    kvs_config.custom_cmp_param = (void*)&user_param;
 
     // open db with custom compare function for variable length key type
     //fdb_open_cmp_variable(&dbfile, "./dummy1", &fconfig);
@@ -2577,7 +2585,9 @@ void custom_compare_variable_test()
     do {
         status = fdb_iterator_get(iterator, &rdoc);
         TEST_CHK(status == FDB_RESULT_SUCCESS);
-        TEST_CHK(_cmp_variable(prev_key, prev_keylen, rdoc->key, rdoc->keylen) <= 0);
+        TEST_CHK(_cmp_variable(prev_key, prev_keylen,
+                               rdoc->key, rdoc->keylen,
+                               kvs_config.custom_cmp_param) <= 0);
         prev_keylen = rdoc->keylen;
         memcpy(prev_key, rdoc->key, rdoc->keylen);
         fdb_doc_free(rdoc);
@@ -2597,8 +2607,9 @@ void custom_compare_variable_test()
     do {
         status = fdb_iterator_get(iterator, &rdoc);
         TEST_CHK(status == FDB_RESULT_SUCCESS);
-        TEST_CHK(_cmp_variable(prev_key, prev_keylen, rdoc->key, rdoc->keylen)
-                 <= 0);
+        TEST_CHK(_cmp_variable(prev_key, prev_keylen,
+                               rdoc->key, rdoc->keylen,
+                               kvs_config.custom_cmp_param) <= 0);
         prev_keylen = rdoc->keylen;
         memcpy(prev_key, rdoc->key, rdoc->keylen);
         fdb_doc_free(rdoc);
@@ -2619,7 +2630,9 @@ void custom_compare_variable_test()
     do {
         status = fdb_iterator_get(iterator, &rdoc);
         TEST_CHK(status == FDB_RESULT_SUCCESS);
-        TEST_CHK(_cmp_variable(prev_key, prev_keylen, rdoc->key, rdoc->keylen) <= 0);
+        TEST_CHK(_cmp_variable(prev_key, prev_keylen,
+                               rdoc->key, rdoc->keylen,
+                               kvs_config.custom_cmp_param) <= 0);
         prev_keylen = rdoc->keylen;
         memcpy(prev_key, rdoc->key, rdoc->keylen);
         fdb_doc_free(rdoc);
@@ -2653,6 +2666,7 @@ void custom_compare_variable_test()
 
     // open another handle
     kvs_config.custom_cmp = NULL;
+    kvs_config.custom_cmp_param = NULL;
     fdb_kvs_open_default(dbfile, &db2, &kvs_config);
 
     // point query
@@ -2721,9 +2735,9 @@ void custom_compare_commit_compact(bool eqkeys)
     fconfig.compaction_threshold = 0;
     fconfig.multi_kv_instances = true;
 
+    uint64_t user_param = 0x1234;
     kvs_config.custom_cmp = _cmp_variable;
-
-
+    kvs_config.custom_cmp_param = (void*)&user_param;
 
     r = system(SHELL_DEL" dummy* > errorlog.txt");
     (void)r;
