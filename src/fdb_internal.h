@@ -101,7 +101,8 @@ void fdb_file_handle_close_all(fdb_file_handle *fhandle);
 void fdb_file_handle_parse_cmp_func(fdb_file_handle *fhandle,
                                     size_t n_func,
                                     char **kvs_names,
-                                    fdb_custom_cmp_variable *functions);
+                                    fdb_custom_cmp_variable *functions,
+                                    void **user_params);
 void fdb_file_handle_clone_cmp_func_list(fdb_file_handle *fhandle,
                                          struct list *cmp_func_list);
 void fdb_file_handle_add_cmp_func(fdb_file_handle *fhandle,

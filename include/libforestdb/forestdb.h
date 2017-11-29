@@ -107,6 +107,8 @@ fdb_status fdb_open(fdb_file_handle **ptr_fhandle,
  *        compare functions.
  * @param functions List of customized compare functions corresponding to each
  *        KV store listed in kvs_names.
+ * @param user_params List of user parameters that will be given to customized
+ *        compare functions.
  * @return FDB_RESULT_SUCCESS on success.
  */
 LIBFDB_API
@@ -115,7 +117,8 @@ fdb_status fdb_open_custom_cmp(fdb_file_handle **ptr_fhandle,
                                fdb_config *fconfig,
                                size_t num_functions,
                                char **kvs_names,
-                               fdb_custom_cmp_variable *functions);
+                               fdb_custom_cmp_variable *functions,
+                               void **user_params);
 
 /**
  * Set up the error logging callback that allows an application to process

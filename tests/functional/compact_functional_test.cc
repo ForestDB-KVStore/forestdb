@@ -2006,7 +2006,7 @@ void auto_compaction_with_custom_cmp_function()
     config.compactor_sleep_duration = 1;
     config.compaction_threshold = 10;
     status = fdb_open_custom_cmp(&file, "compact_test", &config,
-                                 1, kvs_names, functions);
+                                 1, kvs_names, functions, NULL);
     TEST_CHK(status == FDB_RESULT_SUCCESS);
 
     // Open 2 KV Stores

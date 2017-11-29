@@ -159,7 +159,8 @@ void fdb_file_handle_close_all(fdb_file_handle *fhandle)
 void fdb_file_handle_parse_cmp_func(fdb_file_handle *fhandle,
                                     size_t n_func,
                                     char **kvs_names,
-                                    fdb_custom_cmp_variable *functions)
+                                    fdb_custom_cmp_variable *functions,
+                                    void **user_params)
 {
     uint64_t i;
     struct cmp_func_node *node;
@@ -181,6 +182,9 @@ void fdb_file_handle_parse_cmp_func(fdb_file_handle *fhandle,
             node->kvs_name = NULL;
         }
         node->func = functions[i];
+        if (user_params) {
+            node->user_param = user_params[i];
+        }
         list_push_back(fhandle->cmp_func_list, &node->le);
     }
 }
@@ -1731,6 +1735,7 @@ fdb_status fdb_kvs_open(fdb_file_handle *fhandle,
 
                 spin_lock(&kvsh->lock);
                 kvsh->default_kvs_cmp = default_kvs_cmp;
+                kvsh->default_kvs_cmp_param = default_kvs_cmp_param;
 
                 if ( kvsh->default_kvs_cmp == NULL &&
                      root_handle->kvs_config.custom_cmp ) {

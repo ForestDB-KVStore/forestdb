@@ -845,7 +845,8 @@ fdb_status fdb_open_custom_cmp(fdb_file_handle **ptr_fhandle,
                                fdb_config *fconfig,
                                size_t num_functions,
                                char **kvs_names,
-                               fdb_custom_cmp_variable *functions)
+                               fdb_custom_cmp_variable *functions,
+                               void **user_params)
 {
 #ifdef _MEMPOOL
     mempool_init();
@@ -905,8 +906,11 @@ fdb_status fdb_open_custom_cmp(fdb_file_handle **ptr_fhandle,
     fdb_file_handle_init(fhandle, handle);
 
     // insert kvs_names and functions into fhandle's list
-    fdb_file_handle_parse_cmp_func(fhandle, num_functions,
-                                   kvs_names, functions);
+    fdb_file_handle_parse_cmp_func(fhandle,
+                                   num_functions,
+                                   kvs_names,
+                                   functions,
+                                   user_params);
 
     fs = _fdb_open(handle, filename, FDB_VFILENAME, &config);
     if (fs == FDB_RESULT_SUCCESS) {

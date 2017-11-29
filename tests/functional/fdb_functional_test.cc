@@ -2687,6 +2687,34 @@ void custom_compare_variable_test()
     fdb_kvs_close(db2);
     fdb_close(dbfile);
 
+    // re-open check
+    //status = fdb_open(&dbfile, "./dummy2", &fconfig);
+    char* kvs_names[1] = {NULL};
+    fdb_custom_cmp_variable functions[1] = {_cmp_variable};
+    void* params[1] = {(void*)&user_param};
+    status = fdb_open_custom_cmp(&dbfile, "./dummy2", &fconfig,
+                                 1, kvs_names, functions, params);
+    TEST_CHK(status == FDB_RESULT_SUCCESS);
+
+    status = fdb_kvs_open_default(dbfile, &db, &kvs_config);
+    TEST_CHK(status == FDB_RESULT_SUCCESS);
+
+    // point query
+    for (i=0;i<n;++i){
+        fdb_doc_create(&rdoc, doc[i]->key, doc[i]->keylen, NULL, 0, NULL, 0);
+        status = fdb_get(db, rdoc);
+
+        TEST_CHK(status == FDB_RESULT_SUCCESS);
+        TEST_CHK(rdoc->bodylen == doc[i]->bodylen);
+        TEST_CMP(rdoc->body, doc[i]->body, rdoc->bodylen);
+
+        fdb_doc_free(rdoc);
+        rdoc = NULL;
+    }
+
+    fdb_kvs_close(db);
+    fdb_close(dbfile);
+
     // free all documents
     for (i=0;i<n;++i){
         fdb_doc_free(doc[i]);
