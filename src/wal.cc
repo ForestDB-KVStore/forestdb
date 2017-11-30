@@ -72,22 +72,27 @@ INLINE int __wal_cmp_bykey(struct wal_item_header *aa,
             buf2kvid(size_chunk, aa->key, &a_id);
             buf2kvid(size_chunk, bb->key, &b_id);
 
-            if (a_id < b_id) {
-                return -1;
-            } else if (a_id > b_id) {
-                return 1;
-            } else {
-                return info->kvs_config.custom_cmp(
-                            (uint8_t*)aa->key + size_chunk,
-                            aa->keylen - size_chunk,
-                            (uint8_t*)bb->key + size_chunk,
-                            bb->keylen - size_chunk,
-                            info->kvs_config.custom_cmp_param);
-            }
+            if (a_id < b_id) return -1;
+            else if (a_id > b_id) return 1;
+
+            // Otherwise: a_id == b_id
+            if ( aa->keylen == size_chunk &&
+                 bb->keylen == size_chunk ) return 0;
+            else if ( aa->keylen == size_chunk &&
+                      bb->keylen  > size_chunk ) return -1;
+            else if ( aa->keylen  > size_chunk &&
+                      bb->keylen == size_chunk ) return 1;
+
+            // Otherwise: aa->keylen, bb->keylen > size_chunk
+            return info->kvs_config.custom_cmp( (uint8_t*)aa->key + size_chunk,
+                                                aa->keylen - size_chunk,
+                                                (uint8_t*)bb->key + size_chunk,
+                                                bb->keylen - size_chunk,
+                                                info->kvs_config.custom_cmp_param );
         } else {
-            return info->kvs_config.custom_cmp(aa->key, aa->keylen,
-                                               bb->key, bb->keylen,
-                                               info->kvs_config.custom_cmp_param);
+            return info->kvs_config.custom_cmp( aa->key, aa->keylen,
+                                                bb->key, bb->keylen,
+                                                info->kvs_config.custom_cmp_param );
         }
     } else {
         return _wal_keycmp(aa->key, aa->keylen, bb->key, bb->keylen);
