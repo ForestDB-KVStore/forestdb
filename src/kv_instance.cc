@@ -215,6 +215,7 @@ void fdb_file_handle_clone_cmp_func_list(fdb_file_handle *fhandle,
             dst->kvs_name = NULL; // default KVS
         }
         dst->func = src->func;
+        dst->user_param = src->user_param;
         list_push_back(fhandle->cmp_func_list, &dst->le);
         e = list_next(&src->le);
     }
@@ -259,6 +260,7 @@ void fdb_cmp_func_list_from_filemgr(struct filemgr *file, struct list *cmp_func_
     if (file->kv_header->default_kvs_cmp) {
         node = (struct cmp_func_node*)calloc(1, sizeof(struct cmp_func_node));
         node->func = file->kv_header->default_kvs_cmp;
+        node->user_param = file->kv_header->default_kvs_cmp_param;
         node->kvs_name = NULL;
         list_push_back(cmp_func_list, &node->le);
     }
@@ -271,6 +273,7 @@ void fdb_cmp_func_list_from_filemgr(struct filemgr *file, struct list *cmp_func_
         a = avl_next(a);
         node = (struct cmp_func_node*)calloc(1, sizeof(struct cmp_func_node));
         node->func = kvs_node->custom_cmp;
+        node->user_param = kvs_node->user_param;
         node->kvs_name = (char*)calloc(1, strlen(kvs_node->kvs_name)+1);
         strcpy(node->kvs_name, kvs_node->kvs_name);
         list_push_back(cmp_func_list, &node->le);
@@ -328,6 +331,7 @@ fdb_status fdb_kvs_cmp_check(fdb_kvs_handle *handle)
     int ori_flag;
     fdb_file_handle *fhandle = handle->fhandle;
     fdb_custom_cmp_variable ori_custom_cmp;
+    void* ori_custom_param;
     struct filemgr *file = handle->file;
     struct cmp_func_node *cmp_node;
     struct kvs_node *kvs_node, query;
@@ -337,18 +341,22 @@ fdb_status fdb_kvs_cmp_check(fdb_kvs_handle *handle)
     spin_lock(&file->kv_header->lock);
     ori_flag = file->kv_header->custom_cmp_enabled;
     ori_custom_cmp = file->kv_header->default_kvs_cmp;
+    ori_custom_param = file->kv_header->default_kvs_cmp_param;
 
     // Assign from `fhandle->cmp_func_list` to `file->kv_header`.
     if (fhandle->cmp_func_list) {
         handle->kvs_config.custom_cmp = NULL;
+        handle->kvs_config.custom_cmp_param = NULL;
 
         e = list_begin(fhandle->cmp_func_list);
         while (e) {
             cmp_node = _get_entry(e, struct cmp_func_node, le);
-            if (cmp_node->kvs_name == NULL ||
-                    !strcmp(cmp_node->kvs_name, default_kvs_name)) { // default KVS
+            if ( cmp_node->kvs_name == NULL ||
+                 !strcmp(cmp_node->kvs_name, default_kvs_name) ) { // default KVS
                 handle->kvs_config.custom_cmp = cmp_node->func;
+                handle->kvs_config.custom_cmp_param = cmp_node->user_param;
                 file->kv_header->default_kvs_cmp = cmp_node->func;
+                file->kv_header->default_kvs_cmp_param = cmp_node->user_param;
                 file->kv_header->custom_cmp_enabled = 1;
             } else {
                 // search by name
@@ -360,6 +368,7 @@ fdb_status fdb_kvs_cmp_check(fdb_kvs_handle *handle)
                     kvs_node = _get_entry(a, struct kvs_node, avl_name);
                     if (!kvs_node->custom_cmp) {
                         kvs_node->custom_cmp = cmp_node->func;
+                        kvs_node->user_param = cmp_node->user_param;
                     }
                     file->kv_header->custom_cmp_enabled = 1;
                 }
@@ -378,6 +387,7 @@ fdb_status fdb_kvs_cmp_check(fdb_kvs_handle *handle)
             // but no custom cmp function is assigned
             file->kv_header->custom_cmp_enabled = ori_flag;
             file->kv_header->default_kvs_cmp = ori_custom_cmp;
+            file->kv_header->default_kvs_cmp_param = ori_custom_param;
             spin_unlock(&file->kv_header->lock);
             const char *kvs_name = _fdb_kvs_get_name(handle, handle->file);
             if (!kvs_name) {
@@ -395,6 +405,7 @@ fdb_status fdb_kvs_cmp_check(fdb_kvs_handle *handle)
             // but custom cmp function is assigned from user
             file->kv_header->custom_cmp_enabled = ori_flag;
             file->kv_header->default_kvs_cmp = ori_custom_cmp;
+            file->kv_header->default_kvs_cmp_param = ori_custom_param;
             spin_unlock(&file->kv_header->lock);
             const char *kvs_name = _fdb_kvs_get_name(handle, handle->file);
             if (!kvs_name) {
@@ -420,6 +431,7 @@ fdb_status fdb_kvs_cmp_check(fdb_kvs_handle *handle)
             // but no custom cmp function is assigned
             file->kv_header->custom_cmp_enabled = ori_flag;
             file->kv_header->default_kvs_cmp = ori_custom_cmp;
+            file->kv_header->default_kvs_cmp_param = ori_custom_param;
             spin_unlock(&file->kv_header->lock);
             const char *kvs_name = _fdb_kvs_get_name(handle, handle->file);
             if (!kvs_name) {
@@ -437,6 +449,7 @@ fdb_status fdb_kvs_cmp_check(fdb_kvs_handle *handle)
             // but custom cmp function is assigned from user
             file->kv_header->custom_cmp_enabled = ori_flag;
             file->kv_header->default_kvs_cmp = ori_custom_cmp;
+            file->kv_header->default_kvs_cmp_param = ori_custom_param;
             spin_unlock(&file->kv_header->lock);
             const char *kvs_name = _fdb_kvs_get_name(handle, handle->file);
             if (!kvs_name) {
@@ -1578,6 +1591,8 @@ fdb_status _fdb_kvs_clone_snapshot(fdb_kvs_handle *handle_in,
         handle_out->kvs->id = handle_in->kvs->id;
         handle_out->kvs->root = root_handle;
         handle_out->kvs_config.custom_cmp = handle_in->kvs_config.custom_cmp;
+        handle_out->kvs_config.custom_cmp_param =
+            handle_in->kvs_config.custom_cmp_param;
 
         struct kvs_opened_node *opened_node = (struct kvs_opened_node *)
             calloc(1, sizeof(struct kvs_opened_node));
