@@ -8073,7 +8073,7 @@ fdb_status fdb_get_all_snap_markers(fdb_file_handle *fhandle,
 
         if (i == 0) {
             status = filemgr_fetch_header(handle->file, handle->last_hdr_bid,
-                                          header_buf, &header_len, NULL,
+                                          header_buf, &header_len, &seqnum,
                                           &revnum, NULL, &version, NULL,
                                           &handle->log_callback);
         } else {
