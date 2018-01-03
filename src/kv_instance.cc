@@ -1667,6 +1667,7 @@ fdb_status _fdb_kvs_open(fdb_kvs_handle *root_handle,
                            "is read-only.", kvs_name ? kvs_name : DEFAULT_KVS_NAME);
         }
     }
+    handle->kvs_config = *kvs_config;
     fs = _fdb_open(handle, filename, FDB_AFILENAME, config);
     if (fs != FDB_RESULT_SUCCESS) {
         if (handle->node) {
