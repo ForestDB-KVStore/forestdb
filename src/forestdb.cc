@@ -739,14 +739,15 @@ fdb_status fdb_init(fdb_config *config)
         c_config.sleep_duration = _config.compactor_sleep_duration;
         c_config.num_threads = _config.num_compactor_threads;
         compactor_init(&c_config);
+
         // initialize background flusher daemon
         // Temporarily disable background flushers until blockcache contention
         // issue is resolved.
-        bgf_config.num_threads = 0; //_config.num_bgflusher_threads;
-        bgflusher_init(&bgf_config);
+        //bgf_config.num_threads = 0; //_config.num_bgflusher_threads;
+        //bgflusher_init(&bgf_config);
 
         // Initialize breakpad
-        _dbg_handle_crashes(config->breakpad_minidump_dir);
+        //_dbg_handle_crashes(config->breakpad_minidump_dir);
 
         fdb_initialized = 1;
     }
@@ -8239,7 +8240,7 @@ fdb_status fdb_shutdown()
             return FDB_RESULT_FILE_IS_BUSY;
         }
         compactor_shutdown();
-        bgflusher_shutdown();
+        //bgflusher_shutdown();
         ret = filemgr_shutdown();
         if (ret == FDB_RESULT_SUCCESS) {
 #ifdef _MEMPOOL
@@ -8254,7 +8255,7 @@ fdb_status fdb_shutdown()
         } else { // some file may be still open...
             spin_unlock(&initial_lock);
         }
-        _dbg_destroy_altstack();
+        //_dbg_destroy_altstack();
     }
     return ret;
 }

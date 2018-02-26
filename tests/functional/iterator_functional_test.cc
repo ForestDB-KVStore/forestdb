@@ -4249,6 +4249,8 @@ void iterator_seek_to_min_key_with_deletes_test() {
     status = fdb_iterator_seek_to_min(it);
     TEST_CHK(status == FDB_RESULT_ITERATOR_FAIL);
 
+    status = fdb_iterator_close(it);
+    TEST_STATUS(status);
     status = fdb_close(dbfile);
     TEST_STATUS(status);
     status = fdb_shutdown();
