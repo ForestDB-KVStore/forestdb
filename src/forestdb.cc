@@ -679,7 +679,6 @@ fdb_status fdb_init(fdb_config *config)
 {
     fdb_config _config;
     compactor_config c_config;
-    bgflusher_config bgf_config;
     struct filemgr_config f_config;
 
     if (config) {
