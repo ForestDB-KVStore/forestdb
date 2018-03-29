@@ -84,8 +84,18 @@ endif(COUCHBASE_SERVER_BUILD)
 #INCLUDE(FindAsyncIOLib)
 
 if (NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "RelWithDebInfo" CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE)
-endif(NOT CMAKE_BUILD_TYPE)
+     set(DEFAULT_BUILD_TYPE "RelWithDebInfo")
+    #set(DEFAULT_BUILD_TYPE "Debug")
+
+    set(BUILD_TYPE_OPTIONS
+        "Choose the type of build, "
+        "options are: Debug Release RelWithDebInfo MinSizeRel.")
+    set(CMAKE_BUILD_TYPE ${DEFAULT_BUILD_TYPE}
+        CACHE ${BUILD_TYPE_OPTIONS} FORCE)
+    message(STATUS "Build type is not given, use default.")
+endif ()
+message(STATUS "Build type: " ${CMAKE_BUILD_TYPE})
+
 
 if(NOT LIBRT)
     unset(LIBRT CACHE)
@@ -101,7 +111,14 @@ if (NOT WIN32)
     FIND_LIBRARY(DL_LIBRARY NAMES dl)
     if (DL_LIBRARY)
         set(DL_LIBRARIES "${DL_LIBRARY}")
+        message(STATUS "DL library : ${DL_LIBRARY}")
     endif (DL_LIBRARY)
+
+    FIND_LIBRARY(DL_STATIC_LIBRARY NAMES libdl.a)
+    if (DL_STATIC_LIBRARY)
+        message(STATUS "DL static library : ${DL_STATIC_LIBRARY}")
+    endif ()
+    
 else (NOT WIN32)
     set(FORESTDB_FILE_OPS "src/filemgr_ops_windows.cc")
     set(GETTIMEOFDAY_VS "${PROJECT_SOURCE_DIR}/utils/gettimeofday_vs.cc")
@@ -231,12 +248,18 @@ add_library(static_lib
             ${GETTIMEOFDAY_VS}
             ${FORESTDB_CORE_SRC}
             ${FORESTDB_UTILS_SRC})
-target_link_libraries(static_lib ${PTHREAD_LIB} ${LIBM} ${SNAPPY_LIBRARIES}
-                      ${ASYNC_IO_LIB} ${MALLOC_LIBRARIES} ${LIBRT}
+target_link_libraries(static_lib 
+                      ${PTHREAD_LIB} 
+                      ${LIBM} 
+                      ${SNAPPY_STATIC_LIBRARIES}
+                      ${ASYNC_IO_LIB} 
+                      ${MALLOC_LIBRARIES} 
+                      ${LIBRT}
                       ${CRYPTO_LIB}
-                      ${DL_LIBRARIES} ${BREAKPAD_LIBRARIES})
+                      ${DL_STATIC_LIBRARY} 
+                      ${BREAKPAD_LIBRARIES})
 set_target_properties(static_lib PROPERTIES OUTPUT_NAME forestdb CLEAN_DIRECT_OUTPUT 1)
-					  
+
 # Create objects libraries for the different "tools" parts forestdb, which can be reused
 # by various targets.
 add_library(FDB_TOOLS_CORE OBJECT ${FORESTDB_CORE_SRC})

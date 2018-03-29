@@ -30,9 +30,26 @@ FIND_LIBRARY(SNAPPY_LIBRARIES
                  /opt/snappy
                  /opt)
 
+FIND_LIBRARY(SNAPPY_STATIC_LIBRARIES
+             NAMES libsnappy.a
+             HINTS
+                 ENV SNAPPY_DIR
+             PATHS
+                 ~/Library/Frameworks
+                 /Library/Frameworks
+                 /usr/local
+                 /opt/local
+                 /opt/csw
+                 /opt/snappy
+                 /opt)
+
+                 
 IF (SNAPPY_LIBRARIES)
   include_directories(AFTER ${SNAPPY_INCLUDE_DIR})
   MESSAGE(STATUS "Found snappy in ${SNAPPY_INCLUDE_DIR} : ${SNAPPY_LIBRARIES}")
+  IF (SNAPPY_STATIC_LIBRARIES)
+    MESSAGE(STATUS "Found snappy static library : ${SNAPPY_STATIC_LIBRARIES}")
+  ENDIF()
 ELSE (SNAPPY_LIBRARIES)
   MESSAGE(FATAL_ERROR "Can't build forestdb without Snappy")
 ENDIF (SNAPPY_LIBRARIES)
