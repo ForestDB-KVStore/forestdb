@@ -2059,6 +2059,8 @@ fdb_status fdb_iterator_get(fdb_iterator *iterator, fdb_doc **doc)
     int64_t _offset = docio_read_doc(dhandle, offset, &_doc, true);
     if (_offset <= 0) {
         atomic_cas_uint8_t(&iterator->handle->handle_busy, 1, 0);
+        fdb_doc_free(*doc);
+        *doc = NULL;
         return _offset < 0 ? (fdb_status) _offset : FDB_RESULT_KEY_NOT_FOUND;
     }
     if (_doc.length.flag & DOCIO_DELETED &&
@@ -2160,6 +2162,8 @@ fdb_status fdb_iterator_get_metaonly(fdb_iterator *iterator, fdb_doc **doc)
     _offset = docio_read_doc_key_meta(dhandle, offset, &_doc, true);
     if (_offset <= 0) {
         atomic_cas_uint8_t(&iterator->handle->handle_busy, 1, 0);
+        fdb_doc_free(*doc);
+        *doc = NULL;
         return _offset < 0 ? (fdb_status)_offset : FDB_RESULT_KEY_NOT_FOUND;
     }
     if (_doc.length.flag & DOCIO_DELETED &&
