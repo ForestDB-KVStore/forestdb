@@ -251,12 +251,12 @@ add_library(static_lib
 target_link_libraries(static_lib 
                       ${PTHREAD_LIB} 
                       ${LIBM} 
-                      ${SNAPPY_STATIC_LIBRARIES}
+                      ${SNAPPY_LIBRARIES}
                       ${ASYNC_IO_LIB} 
                       ${MALLOC_LIBRARIES} 
                       ${LIBRT}
                       ${CRYPTO_LIB}
-                      ${DL_STATIC_LIBRARY} 
+                      ${DL_LIBRARIES} 
                       ${BREAKPAD_LIBRARIES})
 set_target_properties(static_lib PROPERTIES OUTPUT_NAME forestdb CLEAN_DIRECT_OUTPUT 1)
 
