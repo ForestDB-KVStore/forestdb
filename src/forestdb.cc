@@ -4439,6 +4439,7 @@ fdb_commit_start:
     if (wal_flushed) {
         wal_release_flushed_items(handle->file, &flush_items);
     }
+    handle->cur_header_revnum = fdb_set_file_header(handle, true);
 
     btreeblk_reset_subblock_info(handle->bhandle);
 
@@ -8098,6 +8099,7 @@ fdb_status fdb_get_all_snap_markers(fdb_file_handle *fhandle,
                          &ndocs, &ndeletes, &nlivenodes, &datasize,
                          &last_wal_flush_hdr_bid, &kv_info_offset,
                          &header_flags, &compacted_filename, NULL);
+
         markers[i].marker = (fdb_snapshot_marker_t)hdr_bid;
         if (kv_info_offset == BLK_NOT_FOUND) { // Single kv instance mode
             markers[i].num_kvs_markers = 1;
