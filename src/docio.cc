@@ -520,7 +520,6 @@ INLINE uint8_t _docio_length_checksum(struct docio_length length, struct docio_h
 
 INLINE bid_t _docio_append_doc(struct docio_handle *handle, struct docio_object *doc)
 {
-    size_t _len;
     uint32_t offset = 0;
     uint32_t crc;
     uint64_t docsize;
@@ -529,7 +528,6 @@ INLINE bid_t _docio_append_doc(struct docio_handle *handle, struct docio_object 
     fdb_seqnum_t _seqnum;
     timestamp_t _timestamp;
     struct docio_length length, _length;
-    err_log_callback *log_callback = handle->log_callback;
 
     length = doc->length;
     length.bodylen_ondisk = length.bodylen;
@@ -542,9 +540,10 @@ INLINE bid_t _docio_append_doc(struct docio_handle *handle, struct docio_object 
         compbuf_len = snappy_max_compressed_length(length.bodylen);
         compbuf = (void *)malloc(compbuf_len);
 
-        _len = compbuf_len;
+        size_t _len = compbuf_len;
         ret = snappy_compress((char*)doc->body, length.bodylen, (char*)compbuf, &_len);
         if (ret < 0) { // LCOV_EXCL_START
+            err_log_callback *log_callback = handle->log_callback;
             fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_COMPRESSION_FAIL,
                     "Error in compressing the doc body of key '%s' from "
                     "a database file '%s'",

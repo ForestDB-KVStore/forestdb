@@ -57,7 +57,6 @@ static void fdb_add_inmem_stale_info(fdb_kvs_handle *handle,
                                      uint64_t doc_offset,
                                      bool system_doc_only)
 {
-    int ret;
     size_t buflen = 0;
     struct filemgr *file = handle->file;
     struct avl_node *a;
@@ -86,8 +85,9 @@ static void fdb_add_inmem_stale_info(fdb_kvs_handle *handle,
         if (compress_inmem_stale_info) {
             buflen = snappy_max_compressed_length(doc->length.bodylen);;
             entry->ctx = (void *)calloc(1, buflen);
-            ret = snappy_compress((char*)doc->body, doc->length.bodylen,
-                (char*)entry->ctx, &buflen);
+            int ret = snappy_compress
+                      ( (char*)doc->body, doc->length.bodylen,
+                        (char*)entry->ctx, &buflen );
             if (ret != 0) {
                 fdb_log(NULL, FDB_LOG_ERROR, FDB_RESULT_COMPRESSION_FAIL,
                         "(fdb_add_inmem_stale_info) "
@@ -599,7 +599,6 @@ reusable_block_list fdb_get_reusable_block(fdb_kvs_handle *handle,
     if (avl) {
         // if in-memory stale info exists
         void *uncomp_buf = NULL;
-        int r;
         size_t uncomp_buflen = 128*1024; // 128 KB by default;
         struct stale_info_commit *commit;
         struct stale_info_entry *entry;
@@ -706,8 +705,9 @@ reusable_block_list fdb_get_reusable_block(fdb_kvs_handle *handle,
                         uncomp_buf = new_uncomp_buf;
 
                         size_t len = uncomp_buflen;
-                        r = snappy_uncompress((char*)entry->ctx, entry->comp_ctxlen,
-                                              (char*)uncomp_buf, &len);
+                        int r = snappy_uncompress
+                                ( (char*)entry->ctx, entry->comp_ctxlen,
+                                  (char*)uncomp_buf, &len );
                         if (r != 0) {
                             fdb_log(NULL, FDB_LOG_ERROR, FDB_RESULT_COMPRESSION_FAIL,
                                     "(fdb_get_reusable_block) "
