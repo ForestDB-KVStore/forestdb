@@ -2847,6 +2847,8 @@ void fdb_sync_db_header(fdb_kvs_handle *handle)
                                     handle->staletree->kv_ops,
                                     handle->staletree->blksize,
                                     new_stale_root);
+                btreeblk_end((struct btreeblk_handle*)
+                             handle->staletree->blk_handle);
             } else {
                 handle->staletree = NULL;
             }
