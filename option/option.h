@@ -105,9 +105,9 @@
 #define SB_PRE_RECLAIM_RATIO (10) // 10 %
 
 #define __BTREEBLK_BLOCKPOOL
-#define __BTREEBLK_SUBBLOCK
+//#define __BTREEBLK_SUBBLOCK
 //#define __BTREEBLK_READ_TREE // not used now, for future use
-#define BTREEBLK_AGE_LIMIT (10)
+#define BTREEBLK_AGE_LIMIT (0)
 #define BTREEBLK_MIN_SUBBLOCK (128)
 //#define __BTREEBLK_CACHE
 #ifdef __BTREEBLK_CACHE
