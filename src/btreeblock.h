@@ -53,17 +53,8 @@ struct btreeblk_handle{
     struct filemgr *file;
     err_log_callback *log_callback;
 
-#ifdef __BTREEBLK_READ_TREE
-    struct avl_tree read_tree;
-#endif
 #ifdef __BTREEBLK_BLOCKPOOL
     struct list blockpool;
-#endif
-
-#ifdef __BTREEBLK_CACHE
-    uint16_t bin_size;
-    struct list recycle_bin;
-    struct btreeblk_block *cache[BTREEBLK_CACHE_LIMIT];
 #endif
 
     uint32_t nsb;
