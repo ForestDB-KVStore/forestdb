@@ -27,7 +27,7 @@
 #include "filemgr.h"
 #include "filemgr_ops.h"
 
-#define MAX_READ_RETRY (5000) // 5 seconds
+#define MAX_READ_RETRY (3000) // 10 ms * 3000 = 30 seconds
 
 #if !defined(WIN32) && !defined(_WIN32)
 
@@ -56,8 +56,8 @@ ssize_t _filemgr_linux_pwrite(int fd, void *buf, size_t count, cs_off_t offset)
         } while (rv == -1 && errno == EINTR); // LCOV_EXCL_LINE
 
         // TODO: need to check `errno`?
-        if (count && rv == 0) {
-            usleep(1000);
+        if (count && rv != count) {
+            usleep(10000);
             num_retry++;
             continue;
         }
@@ -86,8 +86,8 @@ ssize_t _filemgr_linux_pread(int fd, void *buf, size_t count, cs_off_t offset)
         } while (rv == -1 && errno == EINTR); // LCOV_EXCL_LINE
 
         // TODO: need to check `errno`?
-        if (count && rv == 0) {
-            usleep(1000);
+        if (count && rv != count) {
+            usleep(10000);
             num_retry++;
             continue;
         }
