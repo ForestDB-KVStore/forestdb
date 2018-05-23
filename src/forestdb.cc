@@ -7996,6 +7996,8 @@ fdb_status fdb_get_file_info(fdb_file_handle *fhandle, fdb_file_info *info)
     }
     info->num_kv_stores = num;
 
+    info->sb_bmp_revnum = sb_get_bmp_revnum(handle->file);
+
     return FDB_RESULT_SUCCESS;
 }
 

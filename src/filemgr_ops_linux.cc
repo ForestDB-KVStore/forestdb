@@ -56,7 +56,7 @@ ssize_t _filemgr_linux_pwrite(int fd, void *buf, size_t count, cs_off_t offset)
         } while (rv == -1 && errno == EINTR); // LCOV_EXCL_LINE
 
         // TODO: need to check `errno`?
-        if (count && rv != count) {
+        if (count && rv != (ssize_t)count) {
             usleep(10000);
             num_retry++;
             continue;
@@ -86,7 +86,7 @@ ssize_t _filemgr_linux_pread(int fd, void *buf, size_t count, cs_off_t offset)
         } while (rv == -1 && errno == EINTR); // LCOV_EXCL_LINE
 
         // TODO: need to check `errno`?
-        if (count && rv != count) {
+        if (count && rv != (ssize_t)count) {
             usleep(10000);
             num_retry++;
             continue;

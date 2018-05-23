@@ -643,9 +643,13 @@ typedef struct {
      */
     uint64_t file_size;
     /**
-     * Number of KV store instances in a ForestDB file
+     * Number of KV store instances in a ForestDB file.
      */
-    size_t num_kv_stores;
+    uint64_t num_kv_stores;
+    /**
+     * Revision number of Superblock's bitmap.
+     */
+    uint64_t sb_bmp_revnum;
 } fdb_file_info;
 
 /**
