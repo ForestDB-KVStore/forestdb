@@ -515,6 +515,10 @@ typedef struct {
      * 6: up to Trace level.
      */
     size_t log_msg_level;
+    /**
+     * If true, stay at the current file even after compaction.
+     */
+    bool do_not_move_to_compacted_file;
 } fdb_config;
 
 typedef struct {

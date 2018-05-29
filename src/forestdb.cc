@@ -2893,7 +2893,8 @@ fdb_status fdb_check_file_reopen(fdb_kvs_handle *handle, file_status_t *status)
     fdb_status fs = FDB_RESULT_SUCCESS;
     file_status_t fstatus = filemgr_get_file_status(handle->file);
     // check whether the compaction is done
-    if (fstatus == FILE_REMOVED_PENDING) {
+    if ( fstatus == FILE_REMOVED_PENDING &&
+         !handle->config.do_not_move_to_compacted_file ) {
         uint64_t ndocs, ndeletes, datasize, nlivenodes, last_wal_flush_hdr_bid;
         uint64_t kv_info_offset, header_flags;
         size_t header_len;
@@ -2926,6 +2927,7 @@ fdb_status fdb_check_file_reopen(fdb_kvs_handle *handle, file_status_t *status)
             filemgr_fhandle_add(handle->file, handle->fhandle);
 
         } else {
+            // Manual compaction.
             filemgr_get_header(handle->file, buf, &header_len, NULL, NULL, NULL);
             fdb_fetch_header(handle->file->version, buf,
                              &trie_root_bid, &seq_root_bid, &stale_root_bid,

@@ -100,6 +100,9 @@ fdb_config get_default_config(void) {
     // Default log level: FATAL (1)
     fconfig.log_msg_level = 1;
 
+    // Auto move to new file.
+    fconfig.do_not_move_to_compacted_file = false;
+
     return fconfig;
 }
 
