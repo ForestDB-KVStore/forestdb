@@ -512,8 +512,11 @@ void compactor_init(struct compactor_config *config)
 
             // create worker threads
             num_compactor_threads = config->num_threads;
-            compactor_tids = (thread_t *) calloc(num_compactor_threads, sizeof(thread_t));
-            for (size_t i = 0; i < num_compactor_threads; ++i) {
+            compactor_tids = (thread_t *)calloc
+                             ( num_compactor_threads, sizeof(thread_t) );
+            for ( size_t i = 0;
+                  config->spawn_threads && i < num_compactor_threads;
+                  ++i ) {
                 thread_create(&compactor_tids[i], compactor_thread, NULL);
             }
 
@@ -1200,7 +1203,6 @@ fdb_status compactor_destroy_file(char *filename,
     struct openfiles_elem query, *elem;
     size_t strcmp_len;
     fdb_status status = FDB_RESULT_SUCCESS;
-    compactor_config c_config;
 
     strcmp_len = strlen(filename);
     filename[strcmp_len] = '.'; // add a . suffix in place
@@ -1208,8 +1210,8 @@ fdb_status compactor_destroy_file(char *filename,
     filename[strcmp_len] = '\0';
     strcpy(query.filename, filename);
 
-    c_config.sleep_duration = config->compactor_sleep_duration;
-    c_config.num_threads = config->num_compactor_threads;
+    compactor_config c_config;
+    c_config = *config;
     compactor_init(&c_config);
 
     mutex_lock(&cpt_lock);

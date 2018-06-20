@@ -473,6 +473,10 @@ typedef struct {
      */
     size_t num_compactor_threads;
     /**
+     * If false, do not use background auto compactor.
+     */
+    bool enable_background_compactor;
+    /**
      * Number of background flusher threads. It is set to 4 threads by default.
      * For write intensive workloads with large commit intervals and many files
      * it is recommended to increase this value if the host machine has enough

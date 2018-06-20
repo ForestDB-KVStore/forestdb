@@ -26,9 +26,21 @@
 extern "C" {
 #endif
 
-struct compactor_config{
+struct compactor_config {
+    compactor_config()
+        : sleep_duration(FDB_COMPACTOR_SLEEP_DURATION)
+        , num_threads(DEFAULT_NUM_COMPACTOR_THREADS)
+        , spawn_threads(true)
+        {}
+    compactor_config& operator=(const fdb_config& src) {
+        sleep_duration = src.compactor_sleep_duration;
+        num_threads = src.num_compactor_threads;
+        spawn_threads = src.enable_background_compactor;
+        return *this;
+    }
     size_t sleep_duration;
     size_t num_threads;
+    bool spawn_threads;
 };
 
 void compactor_init(struct compactor_config *config);
