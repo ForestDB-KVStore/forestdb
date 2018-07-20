@@ -543,6 +543,7 @@ void compactor_shutdown()
     mutex_unlock(&sync_mutex);
 
     for (size_t i = 0; i < num_compactor_threads; ++i) {
+        if (!compactor_tids[i]) continue;
         thread_join(compactor_tids[i], &ret);
     }
     free(compactor_tids);
