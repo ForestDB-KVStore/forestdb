@@ -1406,21 +1406,24 @@ fdb_status _fdb_iterator_seek_to_max_key(fdb_iterator *iterator) {
     // correctly
     iterator->direction = FDB_ITR_FORWARD;
     if (iterator->end_keylen > size_chunk) {
-        fdb_iterator_seek_opt_t dir = (iterator->opt & FDB_ITR_SKIP_MAX_KEY) ?
-                                      FDB_ITR_SEEK_LOWER : FDB_ITR_SEEK_HIGHER;
-        fdb_status status = _fdb_iterator_seek(iterator,
-                (uint8_t *)iterator->end_key + size_chunk,
-                iterator->end_keylen - size_chunk,
-                dir, true);// not regular seek
+        fdb_iterator_seek_opt_t dir = (iterator->opt & FDB_ITR_SKIP_MAX_KEY)
+                                      ? FDB_ITR_SEEK_LOWER
+                                      : FDB_ITR_SEEK_HIGHER;
+        fdb_status status = _fdb_iterator_seek
+                            ( iterator,
+                              (uint8_t *)iterator->end_key + size_chunk,
+                              iterator->end_keylen - size_chunk,
+                              dir, true ); // not regular seek
 
         if (status != FDB_RESULT_SUCCESS && dir == FDB_ITR_SEEK_HIGHER) {
             dir = FDB_ITR_SEEK_LOWER;
             // It is possible that the max key specified during init does not
             // exist, so retry the seek with the LOWER key
-            return _fdb_iterator_seek(iterator,
-                    (uint8_t *)iterator->end_key + size_chunk,
-                    iterator->end_keylen - size_chunk,
-                    dir, true);// not regular seek
+            return _fdb_iterator_seek
+                   ( iterator,
+                     (uint8_t *)iterator->end_key + size_chunk,
+                     iterator->end_keylen - size_chunk,
+                     dir, true ); // not regular seek
         }
         return status;
     }
@@ -1436,12 +1439,12 @@ fdb_status _fdb_iterator_seek_to_max_key(fdb_iterator *iterator) {
         hbtrie_iterator_init(iterator->handle->trie, iterator->hbtrie_iterator,
                              iterator->end_key, iterator->end_keylen);
         // get first key
-        hbtrie_prev(iterator->hbtrie_iterator, iterator->_key,
-                         &iterator->_keylen, (void*)&iterator->_offset);
+        hbtrie_prev( iterator->hbtrie_iterator, iterator->_key,
+                     &iterator->_keylen, (void*)&iterator->_offset );
         iterator->_offset = _endian_decode(iterator->_offset);
-        cmp = _fdb_key_cmp(iterator,
-                               iterator->end_key, iterator->end_keylen,
-                               iterator->_key, iterator->_keylen);
+        cmp = _fdb_key_cmp( iterator,
+                            iterator->end_key, iterator->end_keylen,
+                            iterator->_key, iterator->_keylen );
         if (cmp < 0) {
             // returned key is larger than the end key .. skip
             iterator->_offset = BLK_NOT_FOUND;
@@ -1449,6 +1452,26 @@ fdb_status _fdb_iterator_seek_to_max_key(fdb_iterator *iterator) {
     } else {
         // move HB+trie iterator's cursor to the last entry
         hbtrie_last(iterator->hbtrie_iterator);
+        iterator->_offset = BLK_NOT_FOUND;
+    }
+
+    if (iterator->_offset != BLK_NOT_FOUND) {
+        // deletion check
+        struct docio_object _doc;
+        memset(&_doc, 0x0, sizeof(struct docio_object));
+        int64_t _offset = 0;
+        _offset = docio_read_doc_key_meta
+                  ( iterator->handle->dhandle, iterator->_offset, &_doc, true );
+        if (_offset <= 0) {
+            // read fail, get prev doc below.
+            iterator->_offset = BLK_NOT_FOUND;
+        }
+        if (_doc.length.flag & DOCIO_DELETED) {
+            // deleted doc, get prev doc below.
+            iterator->_offset = BLK_NOT_FOUND;
+        }
+        free(_doc.key);
+        free(_doc.meta);
     }
 
     // also move WAL tree's cursor to the last entry
