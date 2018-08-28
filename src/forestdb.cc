@@ -721,7 +721,11 @@ fdb_status fdb_init(fdb_config *config)
         f_config.ncacheblock = _config.buffercache_size / _config.blocksize;
         f_config.seqtree_opt = _config.seqtree_opt;
         filemgr_init(&f_config);
-        filemgr_set_lazy_file_deletion(true,
+
+        // WARNING: If background compactor is disabled,
+        //          we should disable lazy deletion as well,
+        //          since there will be no thread to do deletion.
+        filemgr_set_lazy_file_deletion(_config.enable_background_compactor,
                                        compactor_register_file_removing,
                                        compactor_is_file_removed);
         if (ver_superblock_support(ver_get_latest_magic())) {
