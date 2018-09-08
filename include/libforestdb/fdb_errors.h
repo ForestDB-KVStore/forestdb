@@ -354,10 +354,15 @@ typedef enum {
      * Resource temporarily unavailable.
      */
     FDB_RESULT_EAGAIN = -72,
+    /**
+     * The file is already compacted.
+     */
+    FDB_RESULT_ALREADY_COMPACTED = -73,
 
     // Any new error codes can be added here.
 
-    FDB_RESULT_LAST = FDB_RESULT_EAGAIN // Last (minimum) fdb_status value
+    // Last (minimum) fdb_status value
+    FDB_RESULT_LAST = FDB_RESULT_ALREADY_COMPACTED
 } fdb_status;
 
 #ifdef __cplusplus

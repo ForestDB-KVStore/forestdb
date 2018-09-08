@@ -6634,7 +6634,7 @@ fdb_status _fdb_compact_file_checks(fdb_kvs_handle *handle,
         fdb_check_file_reopen(handle, NULL);
         fdb_sync_db_header(handle);
 
-        return FDB_RESULT_COMPACTION_FAIL;
+        return FDB_RESULT_ALREADY_COMPACTED;
     }
 
     if (handle->kvs) {

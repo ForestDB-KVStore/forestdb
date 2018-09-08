@@ -230,6 +230,9 @@ const char* fdb_error_msg(fdb_status err_code)
         case FDB_RESULT_EAGAIN:
             return "Resource temporarily unavailable";
 
+        case FDB_RESULT_ALREADY_COMPACTED:
+            return "DB file has been already compacted";
+
         default:
             return "unknown error";
     }
