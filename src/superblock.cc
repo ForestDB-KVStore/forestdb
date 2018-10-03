@@ -603,8 +603,9 @@ sb_decision_t sb_check_block_reusing(fdb_kvs_handle *handle)
                     // re-reclaim
                     return SBD_RECLAIM;
                 }
-            } else if ( (sb->num_free_blocks * 100 <
-                         sb->num_init_free_blocks * SB_PRE_RECLAIM_RATIO)) {
+            } else if ( handle->config.enable_reusable_block_reservation &&
+                        ( sb->num_free_blocks * 100 <
+                              sb->num_init_free_blocks * SB_PRE_RECLAIM_RATIO ) ) {
                 if (sb->num_init_free_blocks * handle->file->config->blocksize >
                     SB_MIN_BLOCK_REUSING_FILESIZE)  {
                     return SBD_RESERVE;

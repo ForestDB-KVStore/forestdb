@@ -104,6 +104,9 @@ fdb_config get_default_config(void) {
     // Auto move to new file.
     fconfig.do_not_move_to_compacted_file = false;
 
+    // Disable reserved blocks.
+    fconfig.enable_reusable_block_reservation = false;
+
     return fconfig;
 }
 

@@ -523,6 +523,10 @@ typedef struct {
      * If true, stay at the current file even after compaction.
      */
     bool do_not_move_to_compacted_file;
+    /**
+     * If true, enable reserved block bitmap.
+     */
+    bool enable_reusable_block_reservation;
 } fdb_config;
 
 typedef struct {
