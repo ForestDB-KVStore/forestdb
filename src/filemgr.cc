@@ -2463,10 +2463,6 @@ fdb_status filemgr_commit_bid(struct filemgr *file, bid_t bid,
         // block reusing is currently enabled
         atomic_store_uint64_t(&file->last_commit,
             atomic_get_uint64_t(&file->sb->cur_alloc_bid) * file->blocksize);
-    } else {
-        atomic_store_uint64_t(&file->last_commit, atomic_get_uint64_t(&file->pos));
-    }
-    if (file->sb) {
         // Since some more blocks may be allocated after the header block
         // (for storing BMP data or system docs for stale info)
         // so that the block pointed to by 'cur_alloc_bid' may have
@@ -2474,6 +2470,10 @@ fdb_status filemgr_commit_bid(struct filemgr *file, bid_t bid,
         // up-to-date bmp_revnum here.
         atomic_store_uint64_t(&file->last_writable_bmp_revnum,
                               filemgr_get_sb_bmp_revnum(file));
+    } else {
+        atomic_store_uint64_t(&file->last_commit, atomic_get_uint64_t(&file->pos));
+        // WARNING: if `last_commit` is at the end of file,
+        //          we should NOT update `last_writable_bmp_revnum`.
     }
 
     spin_unlock(&file->lock);
