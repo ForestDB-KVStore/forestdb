@@ -46,6 +46,8 @@ void printISOTime(char* buffer, size_t buffer_len) {
 // Log config that is globally used for this process.
 static fdb_log_config global_log_config;
 
+static err_log_callback global_log_cb;
+
 fdb_status fdb_log_init(struct fdb_log_config log_config) {
     if (log_config.log_msg_level > 6) {
         return FDB_RESULT_INVALID_CONFIG;
@@ -54,10 +56,18 @@ fdb_status fdb_log_init(struct fdb_log_config log_config) {
     return FDB_RESULT_SUCCESS;
 }
 
-fdb_status fdb_log(err_log_callback *log_callback,
-                   fdb_log_levels given_log_level,
-                   fdb_status status,
-                   const char *format, ...)
+fdb_status fdb_log_set_global_callback(err_log_callback* log_callback) {
+    global_log_cb = *log_callback;
+    return FDB_RESULT_SUCCESS;
+}
+
+fdb_status fdb_log_impl(err_log_callback* log_callback,
+                        fdb_log_levels given_log_level,
+                        fdb_status status,
+                        const char* source_file,
+                        const char* func_name,
+                        size_t line_number,
+                        const char *format, ...)
 {
     // 1: Fatal   [FATL]
     // 2: Error   [ERRO]
@@ -79,20 +89,37 @@ fdb_status fdb_log(err_log_callback *log_callback,
     vsprintf(msg, format, args);
     va_end(args);
 
-    if (log_callback && log_callback->callback) {
+    if (log_callback && log_callback->callback_ex) {
+        // If extended callback exist, use it.
+        log_callback->callback_ex
+        ( cur_log_level, status, source_file, func_name, line_number,
+          msg, log_callback->ctx_data );
+        return status;
+
+    } else if (log_callback && log_callback->callback) {
+        // Normal callback.
         log_callback->callback(status, msg, log_callback->ctx_data);
+        return status;
+
+    } else if (global_log_cb.callback_ex) {
+        // Global log callback is given.
+        global_log_cb.callback_ex
+        ( cur_log_level, status, source_file, func_name, line_number,
+          msg, global_log_cb.ctx_data );
+        return status;
+    }
+
+    // Callback is not given.
+    char ISO_time_buffer[64];
+    char log_abbr[7][8] = {"XXXX", "FATL", "ERRO", "WARN",
+                           "INFO", "DEBG", "TRAC"};
+    printISOTime(ISO_time_buffer, 64);
+    if (status != FDB_RESULT_SUCCESS) {
+        fprintf(stderr, "%s [%s][FDB] %s\n",
+                ISO_time_buffer, log_abbr[cur_log_level], msg);
     } else {
-        char ISO_time_buffer[64];
-        char log_abbr[7][8] = {"XXXX", "FATL", "ERRO", "WARN",
-                               "INFO", "DEBG", "TRAC"};
-        printISOTime(ISO_time_buffer, 64);
-        if (status != FDB_RESULT_SUCCESS) {
-            fprintf(stderr, "%s [%s][FDB] %s\n",
-                    ISO_time_buffer, log_abbr[cur_log_level], msg);
-        } else {
-            fprintf(stderr, "%s [%s][FDB] %s\n",
-                    ISO_time_buffer, log_abbr[cur_log_level], msg);
-        }
+        fprintf(stderr, "%s [%s][FDB] %s\n",
+                ISO_time_buffer, log_abbr[cur_log_level], msg);
     }
     return status;
 }

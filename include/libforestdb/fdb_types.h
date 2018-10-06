@@ -550,6 +550,15 @@ typedef struct {
  */
 typedef void (*fdb_log_callback)(int err_code, const char *err_msg, void *ctx_data);
 
+typedef void (*fdb_log_callback_ex)
+             ( int level,
+               int err_code,
+               const char* file,
+               const char* func,
+               size_t line,
+               const char* err_msg,
+               void* ctx_data );
+
 /**
  * Function pointer definition of the fatal error callback function.
  */

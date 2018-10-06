@@ -136,6 +136,16 @@ fdb_status fdb_set_log_callback(fdb_kvs_handle *handle,
                                 fdb_log_callback log_callback,
                                 void *ctx_data);
 
+LIBFDB_API
+fdb_status fdb_set_log_callback_ex(fdb_file_handle* fhandle,
+                                   fdb_kvs_handle* handle,
+                                   fdb_log_callback_ex log_callback,
+                                   void *ctx_data);
+
+LIBFDB_API
+fdb_status fdb_set_log_callback_ex_global(fdb_log_callback_ex log_callback,
+                                          void *ctx_data);
+
 /**
  * Set the fatal error callback that allows an application to specify a
  * function to be called if forestdb encounters a fatal error, before

@@ -45,17 +45,26 @@ struct snap_handle;
 /**
  * Error logging callback struct definition.
  */
-typedef struct {
+struct err_log_callback {
+    err_log_callback()
+        : callback(nullptr)
+        , callback_ex(nullptr)
+        , ctx_data(nullptr) {}
+
     /**
      * Error logging callback function.
      */
     fdb_log_callback callback;
     /**
+     * Extended error logging callback function.
+     */
+    fdb_log_callback_ex callback_ex;
+    /**
      * Application-specific context data that is passed to the logging callback
      * function.
      */
     void *ctx_data;
-} err_log_callback;
+};
 
 typedef struct _fdb_transaction fdb_txn;
 

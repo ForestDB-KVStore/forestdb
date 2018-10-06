@@ -2280,16 +2280,41 @@ fdb_status _fdb_open(fdb_kvs_handle *handle,
 }
 
 LIBFDB_API
-fdb_status fdb_set_log_callback(fdb_kvs_handle *handle,
+fdb_status fdb_set_log_callback(fdb_kvs_handle* handle,
                                 fdb_log_callback log_callback,
-                                void *ctx_data)
+                                void* ctx_data)
 {
-    if (!handle) {
-        return FDB_RESULT_INVALID_HANDLE;
-    }
+    if (!handle) return FDB_RESULT_INVALID_HANDLE;
 
     handle->log_callback.callback = log_callback;
     handle->log_callback.ctx_data = ctx_data;
+    return FDB_RESULT_SUCCESS;
+}
+
+LIBFDB_API
+fdb_status fdb_set_log_callback_ex(fdb_file_handle* fhandle,
+                                   fdb_kvs_handle* handle,
+                                   fdb_log_callback_ex log_callback,
+                                   void* ctx_data)
+{
+    if (!fhandle || !handle) return FDB_RESULT_INVALID_HANDLE;
+
+    fhandle->root->log_callback.callback_ex = log_callback;
+    fhandle->root->log_callback.ctx_data = ctx_data;
+
+    handle->log_callback.callback_ex = log_callback;
+    handle->log_callback.ctx_data = ctx_data;
+    return FDB_RESULT_SUCCESS;
+}
+
+LIBFDB_API
+fdb_status fdb_set_log_callback_ex_global(fdb_log_callback_ex log_callback,
+                                          void* ctx_data)
+{
+    err_log_callback tmp;
+    tmp.callback_ex = log_callback;
+    tmp.ctx_data = ctx_data;
+    fdb_log_set_global_callback(&tmp);
     return FDB_RESULT_SUCCESS;
 }
 

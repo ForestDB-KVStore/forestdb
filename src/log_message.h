@@ -13,10 +13,19 @@ enum {
 };
 
 fdb_status fdb_log_init(struct fdb_log_config log_config);
-fdb_status fdb_log(err_log_callback *log_callback,
-                   fdb_log_levels given_log_level,
-                   fdb_status status,
-                   const char *format, ...);
+
+#define fdb_log(cb, lv, s, ...) \
+    fdb_log_impl(cb, lv, s, __FILE__, __func__, __LINE__, __VA_ARGS__)
+
+fdb_status fdb_log_set_global_callback(err_log_callback* log_callback);
+
+fdb_status fdb_log_impl(err_log_callback* log_callback,
+                        fdb_log_levels given_log_level,
+                        fdb_status status,
+                        const char* source_file,
+                        const char* func_name,
+                        size_t line_number,
+                        const char *format, ...);
 
 struct fdb_log_config {
     fdb_log_config(): log_msg_level(1) {}
