@@ -25,6 +25,7 @@
 #include "btree_kv.h"
 #include "btree_fast_str_kv.h"
 #include "internal_types.h"
+#include "log_message.h"
 
 #include "memleak.h"
 
@@ -81,7 +82,13 @@ int _hbtrie_reform_key(struct hbtrie *trie, void *rawkey,
     } else {
         rsize = rawkeylen;
     }
-    fdb_assert(rsize && rsize <= trie->chunksize, rsize, trie);
+    if ( !(rsize && rsize <= trie->chunksize) ) {
+        // Return error instead of abort.
+        return -1;
+#if 0
+        fdb_assert(rsize && rsize <= trie->chunksize, rsize, trie);
+#endif
+    }
     memcpy((uint8_t*)outkey, (uint8_t*)rawkey, rawkeylen);
 
     if (rsize < csize) {
@@ -107,7 +114,12 @@ static int _hbtrie_reform_key_reverse(struct hbtrie *trie,
 {
     uint8_t rsize;
     rsize = *((uint8_t*)key + keylen - 1);
-    fdb_assert(rsize, rsize, trie);
+    if (!rsize) {
+        return -1;
+#if 0
+        fdb_assert(rsize, rsize, trie);
+#endif
+    }
 
     if (rsize == trie->chunksize) {
         return keylen - trie->chunksize;
@@ -664,8 +676,23 @@ static hbtrie_result _hbtrie_prev(struct hbtrie_iterator *it,
                 offset = trie->btree_kv_ops->value2bid(hbmeta.value);
                 if (!(flag & HBTRIE_PREFIX_MATCH_ONLY)) {
                     *keylen = trie->readkey(trie->doc_handle, offset, key_buf);
-                    it->keylen = _hbtrie_reform_key(trie, key_buf, *keylen,
-                                                    it->curkey);
+                    int _len = _hbtrie_reform_key( trie, key_buf, *keylen,
+                                                   it->curkey );
+                    if (_len < 0) {
+                        // Critical error, return.
+                        fdb_log(nullptr, FDB_LOG_FATAL,
+                                FDB_RESULT_FILE_CORRUPTION,
+                                "hb-trie corruption, btree %lx, trie %lx, "
+                                "offset %lx",
+                                item->btree_it.btree.root_bid,
+                                trie->root_bid,
+                                offset);
+                        btree_iterator_free(&item->btree_it);
+                        list_remove(&it->btreeit_list, &item->le);
+                        mempool_free(item);
+                        return HBTRIE_RESULT_INDEX_CORRUPTED;
+                    }
+                    it->keylen = _len;
                 }
                 memcpy(value_buf, &offset, trie->valuelen);
                 hr = HBTRIE_RESULT_SUCCESS;
@@ -690,7 +717,22 @@ static hbtrie_result _hbtrie_prev(struct hbtrie_iterator *it,
             offset = trie->btree_kv_ops->value2bid(v);
             if (!(flag & HBTRIE_PREFIX_MATCH_ONLY)) {
                 *keylen = trie->readkey(trie->doc_handle, offset, key_buf);
-                it->keylen = _hbtrie_reform_key(trie, key_buf, *keylen, it->curkey);
+                int _len = _hbtrie_reform_key(trie, key_buf, *keylen, it->curkey);
+                if (_len < 0) {
+                    // Critical error, return.
+                    fdb_log(nullptr, FDB_LOG_FATAL,
+                            FDB_RESULT_FILE_CORRUPTION,
+                            "hb-trie corruption, btree %lx, trie %lx, "
+                            "offset %lx",
+                            item->btree_it.btree.root_bid,
+                            trie->root_bid,
+                            offset);
+                    btree_iterator_free(&item->btree_it);
+                    list_remove(&it->btreeit_list, &item->le);
+                    mempool_free(item);
+                    return HBTRIE_RESULT_INDEX_CORRUPTED;
+                }
+                it->keylen = _len;
             }
             memcpy(value_buf, &offset, trie->valuelen);
 
@@ -973,7 +1015,22 @@ static hbtrie_result _hbtrie_next(struct hbtrie_iterator *it,
                 } else if (!(flag & HBTRIE_PREFIX_MATCH_ONLY)) {
                     // read entire key from doc's meta
                     *keylen = trie->readkey(trie->doc_handle, offset, key_buf);
-                    it->keylen = _hbtrie_reform_key(trie, key_buf, *keylen, it->curkey);
+                    int _len = _hbtrie_reform_key(trie, key_buf, *keylen, it->curkey);
+                    if (_len < 0) {
+                        // Critical error, return.
+                        fdb_log(nullptr, FDB_LOG_FATAL,
+                                FDB_RESULT_FILE_CORRUPTION,
+                                "hb-trie corruption, btree %lx, trie %lx, "
+                                "offset %lx",
+                                item->btree_it.btree.root_bid,
+                                trie->root_bid,
+                                offset);
+                        btree_iterator_free(&item->btree_it);
+                        list_remove(&it->btreeit_list, &item->le);
+                        mempool_free(item);
+                        return HBTRIE_RESULT_INDEX_CORRUPTED;
+                    }
+                    it->keylen = _len;
                 }
                 memcpy(value_buf, &offset, trie->valuelen);
                 hr = HBTRIE_RESULT_SUCCESS;
@@ -1002,7 +1059,22 @@ static hbtrie_result _hbtrie_next(struct hbtrie_iterator *it,
             } else if (!(flag & HBTRIE_PREFIX_MATCH_ONLY)) {
                 // read entire key from doc's meta
                 *keylen = trie->readkey(trie->doc_handle, offset, key_buf);
-                it->keylen = _hbtrie_reform_key(trie, key_buf, *keylen, it->curkey);
+                int _len = _hbtrie_reform_key(trie, key_buf, *keylen, it->curkey);
+                if (_len < 0) {
+                    // Critical error, return.
+                    fdb_log(nullptr, FDB_LOG_FATAL,
+                            FDB_RESULT_FILE_CORRUPTION,
+                            "hb-trie corruption, btree %lx, trie %lx, "
+                            "offset %lx",
+                            item->btree_it.btree.root_bid,
+                            trie->root_bid,
+                            offset);
+                    btree_iterator_free(&item->btree_it);
+                    list_remove(&it->btreeit_list, &item->le);
+                    mempool_free(item);
+                    return HBTRIE_RESULT_INDEX_CORRUPTED;
+                }
+                it->keylen = _len;
             }
             memcpy(value_buf, &offset, trie->valuelen);
 
@@ -1326,7 +1398,8 @@ static hbtrie_result _hbtrie_find(struct hbtrie *trie, void *key, int keylen,
                 uint8_t *docrawkey = alca(uint8_t, HBTRIE_MAX_KEYLEN);
                 uint8_t *dockey = alca(uint8_t, HBTRIE_MAX_KEYLEN);
 #endif
-                uint32_t docrawkeylen, dockeylen;
+                int dockeylen = 0;
+                uint32_t docrawkeylen = 0;
                 uint64_t offset;
                 int docnchunk, diffchunkno;
 
@@ -1338,6 +1411,19 @@ static hbtrie_result _hbtrie_find(struct hbtrie *trie, void *key, int keylen,
                     // read entire key
                     docrawkeylen = trie->readkey(trie->doc_handle, offset, docrawkey);
                     dockeylen = _hbtrie_reform_key(trie, docrawkey, docrawkeylen, dockey);
+                    if (dockeylen < 0) {
+                        // Critical error, return.
+                        fdb_log(nullptr, FDB_LOG_FATAL,
+                                FDB_RESULT_FILE_CORRUPTION,
+                                "hb-trie corruption, btree %lx, trie %lx, "
+                                "offset %lx",
+                                btree->root_bid,
+                                trie->root_bid,
+                                offset);
+                        free(docrawkey);
+                        free(dockey);
+                        return HBTRIE_RESULT_INDEX_CORRUPTED;
+                    }
 
                     // find first different chunk
                     docnchunk = _get_nchunk(trie, dockey, dockeylen);

@@ -265,9 +265,12 @@ fdb_status fdb_iterator_init(fdb_kvs_handle *handle,
     *ptr_iterator = iterator;
 
     ++iterator->handle->num_iterators; // Increment the iterator counter of the KV handle
-    fdb_iterator_next(iterator); // position cursor at first key
-
+    fs = fdb_iterator_next(iterator); // position cursor at first key
     LATENCY_STAT_END(iterator->handle->file, FDB_LATENCY_ITR_INIT);
+    if (fs == FDB_RESULT_FILE_CORRUPTION) {
+        fdb_iterator_close(iterator);
+        return fs;
+    }
 
     return FDB_RESULT_SUCCESS;
 }
@@ -405,9 +408,12 @@ fdb_status fdb_iterator_sequence_init(fdb_kvs_handle *handle,
     *ptr_iterator = iterator;
 
     ++iterator->handle->num_iterators; // Increment the iterator counter of the KV handle
-    fdb_iterator_next(iterator); // position cursor at first key
-
+    fs = fdb_iterator_next(iterator); // position cursor at first key
     LATENCY_STAT_END(iterator->handle->file, FDB_LATENCY_ITR_SEQ_INIT);
+    if (fs == FDB_RESULT_FILE_CORRUPTION) {
+        fdb_iterator_close(iterator);
+        return fs;
+    }
 
     return FDB_RESULT_SUCCESS;
 }
@@ -479,6 +485,8 @@ start:
             break;
         } while (1);
     }
+    if (hr == HBTRIE_RESULT_INDEX_CORRUPTED) return FDB_RESULT_FILE_CORRUPTION;
+
     keylen = iterator->_keylen;
     offset = iterator->_offset;
 
@@ -642,6 +650,7 @@ start:
             break;
         } while (1);
     }
+    if (hr == HBTRIE_RESULT_INDEX_CORRUPTED) return FDB_RESULT_FILE_CORRUPTION;
 
     keylen = iterator->_keylen;
     offset = iterator->_offset;
@@ -945,6 +954,7 @@ fetch_hbtrie:
             }
         }
     }
+    if (hr == HBTRIE_RESULT_INDEX_CORRUPTED) return FDB_RESULT_FILE_CORRUPTION;
 
     if (hr == HBTRIE_RESULT_SUCCESS && // Validate iteration range limits..
         !next_op) { // only if caller is not seek_to_max/min (handled later)
