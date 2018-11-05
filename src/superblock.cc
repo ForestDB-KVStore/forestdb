@@ -589,28 +589,32 @@ sb_decision_t sb_check_block_reusing(fdb_kvs_handle *handle)
 
     ratio = (filesize - live_datasize) * 100 / filesize;
 
-    if (ratio > block_reusing_threshold) {
-        if (!sb_bmp_exists(sb)) {
-            // block reusing has not been started yet
-            return SBD_RECLAIM;
+    if (ratio <= block_reusing_threshold) return SBD_NONE;
+
+    if (!sb_bmp_exists(sb)) {
+        // block reusing has not been started yet
+        return SBD_RECLAIM;
+    } else if ( handle->config.max_block_reusing_cycle &&
+                sb->bmp_revnum >= handle->config.max_block_reusing_cycle ) {
+        // Cannot exceed the max cycle.
+        return SBD_NONE;
+    }
+
+    // stale blocks are already being reused before
+    if (sb->num_free_blocks == 0) {
+        if (sb->rsv_bmp) {
+            // reserved bitmap exists
+            return SBD_SWITCH;
         } else {
-            // stale blocks are already being reused before
-            if (sb->num_free_blocks == 0) {
-                if (sb->rsv_bmp) {
-                    // reserved bitmap exists
-                    return SBD_SWITCH;
-                } else {
-                    // re-reclaim
-                    return SBD_RECLAIM;
-                }
-            } else if ( handle->config.enable_reusable_block_reservation &&
-                        ( sb->num_free_blocks * 100 <
-                              sb->num_init_free_blocks * SB_PRE_RECLAIM_RATIO ) ) {
-                if (sb->num_init_free_blocks * handle->file->config->blocksize >
-                    SB_MIN_BLOCK_REUSING_FILESIZE)  {
-                    return SBD_RESERVE;
-                }
-            }
+            // re-reclaim
+            return SBD_RECLAIM;
+        }
+    } else if ( handle->config.enable_reusable_block_reservation &&
+                ( sb->num_free_blocks * 100 <
+                      sb->num_init_free_blocks * SB_PRE_RECLAIM_RATIO ) ) {
+        if (sb->num_init_free_blocks * handle->file->config->blocksize >
+            SB_MIN_BLOCK_REUSING_FILESIZE)  {
+            return SBD_RESERVE;
         }
     }
 

@@ -500,6 +500,11 @@ typedef struct {
      */
     size_t block_reusing_threshold;
     /**
+     * If non-zero, block reusing will happen up to the given cycle.
+     * After that, file will be growing without reusing.
+     */
+    size_t max_block_reusing_cycle;
+    /**
      * Number of the last commit headers whose stale blocks should be kept for
      * snapshot readers.
      */

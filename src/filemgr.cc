@@ -1865,7 +1865,6 @@ bid_t filemgr_alloc_multiple_cond(struct filemgr *file, bid_t nextbid, int nbloc
     return bid;
 }
 
-#ifdef __CRC32
 INLINE fdb_status _filemgr_crc32_check(struct filemgr *file, void *buf)
 {
     if ( *((uint8_t*)buf + file->blocksize-1) == BLK_MARKER_BNODE ) {
@@ -1882,7 +1881,6 @@ INLINE fdb_status _filemgr_crc32_check(struct filemgr *file, void *buf)
     }
     return FDB_RESULT_SUCCESS;
 }
-#endif
 
 bool filemgr_invalidate_block(struct filemgr *file, bid_t bid)
 {
@@ -1960,22 +1958,14 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
         lock_no = bid % DLOCK_MAX;
         (void)lock_no;
 
-#ifdef __FILEMGR_DATA_PARTIAL_LOCK
         plock_entry_t *plock_entry = NULL;
         bid_t is_writer = 0;
-#endif
         bool locked = false;
         // Note: we don't need to grab lock for committed blocks
         // because they are immutable so that no writer will interfere and
         // overwrite dirty data
         if (filemgr_is_writable(file, bid)) {
-#ifdef __FILEMGR_DATA_PARTIAL_LOCK
             plock_entry = plock_lock(&file->plock, &bid, &is_writer);
-#elif defined(__FILEMGR_DATA_MUTEX_LOCK)
-            mutex_lock(&file->data_mutex[lock_no]);
-#else
-            spin_lock(&file->data_spinlock[lock_no]);
-#endif //__FILEMGR_DATA_PARTIAL_LOCK
             locked = true;
         }
 
@@ -1984,13 +1974,7 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
             // cache miss
             if (!read_on_cache_miss) {
                 if (locked) {
-#ifdef __FILEMGR_DATA_PARTIAL_LOCK
                     plock_unlock(&file->plock, plock_entry);
-#elif defined(__FILEMGR_DATA_MUTEX_LOCK)
-                    mutex_unlock(&file->data_mutex[lock_no]);
-#else
-                    spin_unlock(&file->data_spinlock[lock_no]);
-#endif //__FILEMGR_DATA_PARTIAL_LOCK
                 }
                 const char *msg = "Read error: BID %" _F64 " in a database file '%s' "
                     "doesn't exist in the cache and read_on_cache_miss flag is turned on.\n";
@@ -2005,13 +1989,7 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
                 _log_errno_str(file->ops, log_callback,
                                (fdb_status) r, "READ", file->filename);
                 if (locked) {
-#ifdef __FILEMGR_DATA_PARTIAL_LOCK
                     plock_unlock(&file->plock, plock_entry);
-#elif defined(__FILEMGR_DATA_MUTEX_LOCK)
-                    mutex_unlock(&file->data_mutex[lock_no]);
-#else
-                    spin_unlock(&file->data_spinlock[lock_no]);
-#endif //__FILEMGR_DATA_PARTIAL_LOCK
                 }
                 const char *msg = "Read error: BID %" _F64 " in a database file '%s' "
                     "is not read correctly: only %d bytes read.\n";
@@ -2023,19 +2001,13 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
                 }
                 return status;
             }
-#ifdef __CRC32
+
             status = _filemgr_crc32_check(file, buf);
             if (status != FDB_RESULT_SUCCESS) {
                 _log_errno_str(file->ops, log_callback, status, "READ",
                         file->filename);
                 if (locked) {
-#ifdef __FILEMGR_DATA_PARTIAL_LOCK
                     plock_unlock(&file->plock, plock_entry);
-#elif defined(__FILEMGR_DATA_MUTEX_LOCK)
-                    mutex_unlock(&file->data_mutex[lock_no]);
-#else
-                    spin_unlock(&file->data_spinlock[lock_no]);
-#endif //__FILEMGR_DATA_PARTIAL_LOCK
                 }
                 const char *msg = "Read error: checksum error on BID %" _F64 " in a database file '%s' "
                     ": marker %x\n";
@@ -2047,17 +2019,11 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
                 }
                 return status;
             }
-#endif
+
             r = bcache_write(file, bid, buf, BCACHE_REQ_CLEAN, false);
             if (r != global_config.blocksize) {
                 if (locked) {
-#ifdef __FILEMGR_DATA_PARTIAL_LOCK
                     plock_unlock(&file->plock, plock_entry);
-#elif defined(__FILEMGR_DATA_MUTEX_LOCK)
-                    mutex_unlock(&file->data_mutex[lock_no]);
-#else
-                    spin_unlock(&file->data_spinlock[lock_no]);
-#endif //__FILEMGR_DATA_PARTIAL_LOCK
                 }
                 _log_errno_str(file->ops, log_callback,
                                (fdb_status) r, "WRITE", file->filename);
@@ -2073,13 +2039,7 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
             }
         }
         if (locked) {
-#ifdef __FILEMGR_DATA_PARTIAL_LOCK
             plock_unlock(&file->plock, plock_entry);
-#elif defined(__FILEMGR_DATA_MUTEX_LOCK)
-            mutex_unlock(&file->data_mutex[lock_no]);
-#else
-            spin_unlock(&file->data_spinlock[lock_no]);
-#endif //__FILEMGR_DATA_PARTIAL_LOCK
         }
     } else {
         if (!read_on_cache_miss) {
@@ -2105,7 +2065,6 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
             return status;
         }
 
-#ifdef __CRC32
         status = _filemgr_crc32_check(file, buf);
         if (status != FDB_RESULT_SUCCESS) {
             _log_errno_str(file->ops, log_callback, status, "READ",
@@ -2120,7 +2079,7 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
             }
             return status;
         }
-#endif
+
     }
     return status;
 }
@@ -2151,7 +2110,7 @@ fdb_status filemgr_write_offset(struct filemgr *file, bid_t bid,
             const char *msg = "Write error: trying to write at the offset %" _F64 " that is "
                               "not identified as a reusable block in "
                               "a database file '%s'\n";
-            fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_WRITE_FAIL,
+            fdb_log(NULL, FDB_LOG_FATAL, FDB_RESULT_WRITE_FAIL,
                     msg, pos, file->filename);
             return FDB_RESULT_WRITE_FAIL;
         }
@@ -2163,7 +2122,7 @@ fdb_status filemgr_write_offset(struct filemgr *file, bid_t bid,
             const char *msg = "Write error: trying to write at the offset %" _F64 " that is "
                               "smaller than the current commit offset %" _F64 " in "
                               "a database file '%s'\n";
-            fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_WRITE_FAIL,
+            fdb_log(NULL, FDB_LOG_FATAL, FDB_RESULT_WRITE_FAIL,
                     msg, pos, curr_commit_pos, file->filename);
             return FDB_RESULT_WRITE_FAIL;
         }
@@ -2174,15 +2133,9 @@ fdb_status filemgr_write_offset(struct filemgr *file, bid_t bid,
         (void)lock_no;
 
         bool locked = false;
-#ifdef __FILEMGR_DATA_PARTIAL_LOCK
         plock_entry_t *plock_entry;
         bid_t is_writer = 1;
         plock_entry = plock_lock(&file->plock, &bid, &is_writer);
-#elif defined(__FILEMGR_DATA_MUTEX_LOCK)
-        mutex_lock(&file->data_mutex[lock_no]);
-#else
-        spin_lock(&file->data_spinlock[lock_no]);
-#endif //__FILEMGR_DATA_PARTIAL_LOCK
         locked = true;
 
         if (len == file->blocksize) {
@@ -2190,13 +2143,7 @@ fdb_status filemgr_write_offset(struct filemgr *file, bid_t bid,
             r = bcache_write(file, bid, buf, BCACHE_REQ_DIRTY, final_write);
             if (r != global_config.blocksize) {
                 if (locked) {
-#ifdef __FILEMGR_DATA_PARTIAL_LOCK
                     plock_unlock(&file->plock, plock_entry);
-#elif defined(__FILEMGR_DATA_MUTEX_LOCK)
-                    mutex_unlock(&file->data_mutex[lock_no]);
-#else
-                    spin_unlock(&file->data_spinlock[lock_no]);
-#endif //__FILEMGR_DATA_PARTIAL_LOCK
                 }
                 _log_errno_str(file->ops, log_callback,
                                (fdb_status) r, "WRITE", file->filename);
@@ -2224,13 +2171,7 @@ fdb_status filemgr_write_offset(struct filemgr *file, bid_t bid,
                     r = filemgr_read_block(file, _buf, bid);
                     if (r != (ssize_t)file->blocksize) {
                         if (locked) {
-#ifdef __FILEMGR_DATA_PARTIAL_LOCK
                             plock_unlock(&file->plock, plock_entry);
-#elif defined(__FILEMGR_DATA_MUTEX_LOCK)
-                            mutex_unlock(&file->data_mutex[lock_no]);
-#else
-                            spin_unlock(&file->data_spinlock[lock_no]);
-#endif //__FILEMGR_DATA_PARTIAL_LOCK
                         }
                         _filemgr_release_temp_buf(_buf);
                         _log_errno_str(file->ops, log_callback, (fdb_status) r,
@@ -2242,13 +2183,7 @@ fdb_status filemgr_write_offset(struct filemgr *file, bid_t bid,
                 r = bcache_write(file, bid, _buf, BCACHE_REQ_DIRTY, final_write);
                 if (r != global_config.blocksize) {
                     if (locked) {
-#ifdef __FILEMGR_DATA_PARTIAL_LOCK
                         plock_unlock(&file->plock, plock_entry);
-#elif defined(__FILEMGR_DATA_MUTEX_LOCK)
-                        mutex_unlock(&file->data_mutex[lock_no]);
-#else
-                        spin_unlock(&file->data_spinlock[lock_no]);
-#endif //__FILEMGR_DATA_PARTIAL_LOCK
                     }
                     _filemgr_release_temp_buf(_buf);
                     _log_errno_str(file->ops, log_callback,
@@ -2261,17 +2196,10 @@ fdb_status filemgr_write_offset(struct filemgr *file, bid_t bid,
         } // full block or partial block
 
         if (locked) {
-#ifdef __FILEMGR_DATA_PARTIAL_LOCK
             plock_unlock(&file->plock, plock_entry);
-#elif defined(__FILEMGR_DATA_MUTEX_LOCK)
-            mutex_unlock(&file->data_mutex[lock_no]);
-#else
-            spin_unlock(&file->data_spinlock[lock_no]);
-#endif //__FILEMGR_DATA_PARTIAL_LOCK
         }
     } else { // block cache disabled
 
-#ifdef __CRC32
         if (len == file->blocksize) {
             uint8_t marker = *((uint8_t*)buf + file->blocksize - 1);
             if (marker == BLK_MARKER_BNODE) {
@@ -2283,7 +2211,6 @@ fdb_status filemgr_write_offset(struct filemgr *file, bid_t bid,
                 memcpy((uint8_t *)buf + BTREE_CRC_OFFSET, &crc32, sizeof(crc32));
             }
         }
-#endif
 
         r = file->ops->pwrite(file->fd, buf, len, pos);
         _log_errno_str(file->ops, log_callback, (fdb_status) r, "WRITE", file->filename);

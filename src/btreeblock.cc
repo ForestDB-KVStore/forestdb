@@ -867,9 +867,11 @@ INLINE fdb_status _btreeblk_write_dirty_block(struct btreeblk_handle *handle,
                                handle->log_callback);
     }
     if (status != FDB_RESULT_SUCCESS) {
-        fdb_log(handle->log_callback, FDB_LOG_ERROR, status,
+        fdb_log(NULL, FDB_LOG_FATAL, status,
                 "Failed to write the B+-Tree block (block id: %" _F64
-                ", block address: %p)", block->bid, block->addr);
+                ", block address: %p, file %s)",
+                block->bid, block->addr,
+                handle->file->filename);
     }
     _btreeblk_decode(handle, block);
     return status;

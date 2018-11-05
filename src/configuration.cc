@@ -89,6 +89,8 @@ fdb_config get_default_config(void) {
     fconfig.num_bgflusher_threads = DEFAULT_NUM_BGFLUSHER_THREADS;
     // Block reusing threshold, 65% by default (i.e., almost 3x space amplification)
     fconfig.block_reusing_threshold = 65;
+    // Unlimited cycle.
+    fconfig.max_block_reusing_cycle = 0;
     // Keep at most 5 recent committed database snapshots
     fconfig.num_keeping_headers = 5;
 
