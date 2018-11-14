@@ -500,6 +500,10 @@ typedef struct {
      */
     size_t block_reusing_threshold;
     /**
+     * Minimum file size to trigger block reusing.
+     */
+    size_t min_block_reuse_filesize;
+    /**
      * If non-zero, block reusing will happen up to the given cycle.
      * After that, file will be growing without reusing.
      */

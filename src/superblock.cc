@@ -568,7 +568,7 @@ sb_decision_t sb_check_block_reusing(fdb_kvs_handle *handle)
     }
 
     filesize = filemgr_get_pos(handle->file);
-    if (filesize < SB_MIN_BLOCK_REUSING_FILESIZE) {
+    if (filesize < handle->config.min_block_reuse_filesize) {
         return SBD_NONE;
     }
 
