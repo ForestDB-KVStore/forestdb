@@ -897,6 +897,11 @@ fdb_status btreeblk_operation_end(void *voidhandle)
                 return status;
             }
         } else {
+            fdb_log(nullptr, FDB_LOG_FATAL,
+                    FDB_RESULT_WRITE_FAIL,
+                    "b+tree node write fail, BID %zu, file %s",
+                    block->bid,
+                    handle->file->filename);
             return FDB_RESULT_WRITE_FAIL;
         }
 

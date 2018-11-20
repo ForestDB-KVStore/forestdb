@@ -1357,7 +1357,7 @@ uint64_t filemgr_fetch_prev_header(struct filemgr *file, uint64_t bid,
         if (marker[0] != BLK_MARKER_DBHEADER) {
             if (bid) {
                 // broken linked list
-                fdb_log(log_callback, FDB_LOG_WARNING, FDB_RESULT_FILE_CORRUPTION,
+                fdb_log(log_callback, FDB_LOG_DEBUG, FDB_RESULT_FILE_CORRUPTION,
                         "A block marker of the previous database header block id %"
                         _F64 " in "
                         "a database file '%s' does NOT match BLK_MARKER_DBHEADER!",
@@ -1960,18 +1960,24 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
 
         plock_entry_t *plock_entry = NULL;
         bid_t is_writer = 0;
-        bool locked = false;
-        // Note: we don't need to grab lock for committed blocks
-        // because they are immutable so that no writer will interfere and
-        // overwrite dirty data
-        if (filemgr_is_writable(file, bid)) {
-            plock_entry = plock_lock(&file->plock, &bid, &is_writer);
-            locked = true;
-        }
+        bool locked = false; (void)locked;
 
         r = bcache_read(file, bid, buf);
         if (r == 0) {
-            // cache miss
+            // Cache miss, grab lock and find once again.
+
+            // WARNING:
+            //   Regardless of writability, we SHOULD grab lock
+            //   as reused blocks are immutable but writers can overwrite it
+            //   and can update block cache sooner. Once race condition happens,
+            //   reader may overwrite it using previous block.
+            plock_entry = plock_lock(&file->plock, &bid, &is_writer);
+            locked = true;
+            r = bcache_read(file, bid, buf);
+        }
+
+        if (r == 0) {
+            // Still cache miss, read from file.
             if (!read_on_cache_miss) {
                 if (locked) {
                     plock_unlock(&file->plock, plock_entry);
