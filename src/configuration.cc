@@ -111,6 +111,9 @@ fdb_config get_default_config(void) {
     // Disable reserved blocks.
     fconfig.enable_reusable_block_reservation = false;
 
+    // Disable bulk load mode.
+    fconfig.bulk_load_mode = false;
+
     return fconfig;
 }
 

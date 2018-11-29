@@ -536,6 +536,11 @@ typedef struct {
      * If true, enable reserved block bitmap.
      */
     bool enable_reusable_block_reservation;
+    /**
+     * If true, ForestDB is assuming that this file is in bulk load mode:
+     * write only, no reads, build index at the end.
+     */
+    bool bulk_load_mode;
 } fdb_config;
 
 typedef struct {

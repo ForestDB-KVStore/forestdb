@@ -856,7 +856,8 @@ INLINE fdb_status _btreeblk_write_dirty_block(struct btreeblk_handle *handle,
     //2 MUST BE modified to support multiple nodes in a block
 
     _btreeblk_encode(handle, block);
-    if (handle->dirty_update_writer) {
+    if ( handle->dirty_update_writer &&
+         !handle->dirty_update_writer->bulk_load_mode ) {
         // dirty update is in-progress
         status = filemgr_write_dirty(handle->file, block->bid, block->addr,
                                      handle->dirty_update_writer,

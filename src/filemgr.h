@@ -289,6 +289,8 @@ struct filemgr_dirty_update_node {
     bid_t seqtree_root;
     // index for dirty blocks
     struct avl_tree dirty_blocks;
+    // if true, do not keep dirty blocks in-memory.
+    bool bulk_load_mode;
 };
 
 struct filemgr_dirty_update_block {

@@ -294,6 +294,7 @@ INLINE void _fdb_dirty_update_ready(fdb_kvs_handle *handle,
 
     if (*prev_node || dirty_wal_flush) {
         *new_node = filemgr_dirty_update_new_node(handle->file);
+        (*new_node)->bulk_load_mode = handle->config.bulk_load_mode;
         // sync dirty root nodes
         filemgr_dirty_update_get_root(handle->file, *prev_node,
                                       dirty_idtree_root, dirty_seqtree_root);
