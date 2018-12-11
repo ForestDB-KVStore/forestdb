@@ -408,6 +408,15 @@ LIBFDB_API
 fdb_status fdb_commit(fdb_file_handle *fhandle, fdb_commit_opt_t opt);
 
 /**
+ * Flush dirty blocks and then call fsync().
+ *
+ * @param fhandle Pointer to ForestDB file handle.
+ * @return FDB_RESULT_SUCCESS on success.
+ */
+LIBFDB_API
+fdb_status fdb_sync_file(fdb_file_handle *fhandle);
+
+/**
  * Create a snapshot of a KV store.
  *
  * @param handle_in ForestDB KV store handle pointer from which snapshot is to be made

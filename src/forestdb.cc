@@ -4238,6 +4238,14 @@ static fdb_status _fdb_append_commit_mark(void *voidhandle, uint64_t offset)
 }
 
 LIBFDB_API
+fdb_status fdb_sync_file(fdb_file_handle *fhandle) {
+    if (!fhandle) return FDB_RESULT_INVALID_HANDLE;
+
+    fdb_status s = filemgr_sync(fhandle->root->file, true, NULL);
+    return s;
+}
+
+LIBFDB_API
 fdb_status fdb_commit(fdb_file_handle *fhandle, fdb_commit_opt_t opt)
 {
     if (!fhandle) {
