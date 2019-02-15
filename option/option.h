@@ -81,7 +81,8 @@
 #define FDB_BGFLUSHER_DIRTY_THRESHOLD (1024) //if more than this 4MB dirty
                                              // wake up any sleeping bgflusher
 
-#define BCACHE_NBUCKET (4099) // a prime number
+//#define BCACHE_NBUCKET (4099) // a prime number
+#define BCACHE_NBUCKET (31) // a prime number
 #define BCACHE_NDICBUCKET (4099) // a prime number
 #define BCACHE_FLUSH_UNIT (1048576) // 1MB
 #define BCACHE_EVICT_UNIT (1)
