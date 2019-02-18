@@ -1415,7 +1415,7 @@ void bcache_init(int nblock, int blocksize)
     freelist_count = 0;
 
     num_files = 0;
-    file_array_capacity = 4096; // Initial capacity of file list array.
+    file_array_capacity = 65536; // Initial capacity of file list array.
     file_list = (fnamedic_item **) calloc(file_array_capacity, sizeof(fnamedic_item *));
     // Allocate entire buffer cache memory
     block_ptr = (uint8_t *)malloc((uint64_t)bcache_blocksize * nblock);
