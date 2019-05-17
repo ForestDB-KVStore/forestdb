@@ -51,16 +51,24 @@ struct docio_handle {
 #ifdef DOCIO_LEN_STRUCT_ALIGN
     // this structure will occupy 16 bytes
     struct docio_length {
+        docio_length()
+            : keylen(0), metalen(0), bodylen(0), bodylen_ondisk(0)
+            , flag(0x0), checksum(0x0), reserved(0x0) {}
         keylen_t keylen;
         uint16_t metalen;
         uint32_t bodylen;
         uint32_t bodylen_ondisk;
         uint8_t flag;
         uint8_t checksum;
+        uint16_t reserved;
     };
 #else
     // this structure will occupy 14 bytes
     struct __attribute__ ((packed)) docio_length {
+        docio_length()
+            : keylen(0), metalen(0), bodylen(0), bodylen_ondisk(0)
+            , flag(0x0), checksum(0x0)
+            {}
         keylen_t keylen;
         uint16_t metalen;
         uint32_t bodylen;
@@ -71,6 +79,10 @@ struct docio_handle {
 #endif
 
 struct docio_object {
+    docio_object()
+        : timestamp(0), key(nullptr), seqnum(0)
+        , meta(nullptr), body(nullptr)
+        {}
     struct docio_length length;
     timestamp_t timestamp;
     void *key;

@@ -69,10 +69,11 @@ INLINE void _btreeblk_get_aligned_block(struct btreeblk_handle *handle,
     }
     // no free addr .. create
     block->addr_item = (struct btreeblk_addr *)
-                       mempool_alloc(sizeof(struct btreeblk_addr));
+                       calloc(1, sizeof(struct btreeblk_addr));
 #endif
 
     malloc_align(block->addr, FDB_SECTOR_SIZE, handle->file->blocksize);
+    memset(block->addr, 0x0, handle->file->blocksize);
 }
 
 INLINE void _btreeblk_free_aligned_block(struct btreeblk_handle *handle,
@@ -143,7 +144,7 @@ INLINE void * _btreeblk_alloc(void *voidhandle, bid_t *bid, int sb_no)
     }
 
     // allocate new block from file manager
-    block = (struct btreeblk_block *)mempool_alloc(sizeof(struct btreeblk_block));
+    block = (struct btreeblk_block *)calloc(1, sizeof(struct btreeblk_block));
     _btreeblk_get_aligned_block(handle, block);
     if (sb_no != -1) {
         // If this block is used as a sub-block container,
@@ -327,7 +328,7 @@ INLINE void * _btreeblk_read(void *voidhandle, bid_t bid, int sb_no)
 
     // there is no block in lists
     // if miss, read from file and add item into read list
-    block = (struct btreeblk_block *)mempool_alloc(sizeof(struct btreeblk_block));
+    block = (struct btreeblk_block *)calloc(1, sizeof(struct btreeblk_block));
     block->sb_no = (subblock)?(sb):(sb_no);
     block->pos = (handle->file->blocksize);
     block->bid = filebid;

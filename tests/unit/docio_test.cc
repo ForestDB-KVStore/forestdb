@@ -55,6 +55,9 @@ void basic_test()
 
     handle.log_callback = NULL;
 
+    memset(keybuf, 0x0, 1024);
+    memset(metabuf, 0x0, 1024);
+    memset(bodybuf, 0x0, 4096);
     doc.key = (void*)keybuf;
     doc.meta = (void*)metabuf;
     doc.body = (void*)bodybuf;
