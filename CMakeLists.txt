@@ -86,6 +86,21 @@ endif(COUCHBASE_SERVER_BUILD)
 
 #INCLUDE(FindAsyncIOLib)
 
+if (NOT BTREE_SUBBLOCK)
+    # Enable by default if not given.
+    set(BTREE_SUBBLOCK "Enable")
+endif ()
+
+if ( (BTREE_SUBBLOCK STREQUAL "Enable") OR
+     (BTREE_SUBBLOCK STREQUAL "enable") OR
+     (BTREE_SUBBLOCK STREQUAL "True") OR
+     (BTREE_SUBBLOCK STREQUAL "true")  )
+    ADD_DEFINITIONS(-D__BTREEBLK_SUBBLOCK=1)
+    MESSAGE(STATUS "B+tree sub-blocks: ENABLED")
+else ()
+    MESSAGE(STATUS "B+tree sub-blocks: DISABLED")
+endif()
+
 if (NOT CMAKE_BUILD_TYPE)
      set(DEFAULT_BUILD_TYPE "RelWithDebInfo")
     #set(DEFAULT_BUILD_TYPE "Debug")
@@ -121,7 +136,7 @@ if (NOT WIN32)
     if (DL_STATIC_LIBRARY)
         message(STATUS "DL static library : ${DL_STATIC_LIBRARY}")
     endif ()
-    
+
 else (NOT WIN32)
     set(FORESTDB_FILE_OPS "src/filemgr_ops_windows.cc")
     set(GETTIMEOFDAY_VS "${PROJECT_SOURCE_DIR}/utils/gettimeofday_vs.cc")
@@ -251,15 +266,15 @@ add_library(static_lib
             ${GETTIMEOFDAY_VS}
             ${FORESTDB_CORE_SRC}
             ${FORESTDB_UTILS_SRC})
-target_link_libraries(static_lib 
-                      ${PTHREAD_LIB} 
-                      ${LIBM} 
+target_link_libraries(static_lib
+                      ${PTHREAD_LIB}
+                      ${LIBM}
                       ${SNAPPY_LIBRARIES}
-                      ${ASYNC_IO_LIB} 
-                      ${MALLOC_LIBRARIES} 
+                      ${ASYNC_IO_LIB}
+                      ${MALLOC_LIBRARIES}
                       ${LIBRT}
                       ${CRYPTO_LIB}
-                      ${DL_LIBRARIES} 
+                      ${DL_LIBRARIES}
                       ${BREAKPAD_LIBRARIES})
 set_target_properties(static_lib PROPERTIES OUTPUT_NAME forestdb CLEAN_DIRECT_OUTPUT 1)
 
