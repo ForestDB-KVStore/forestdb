@@ -49,6 +49,12 @@ CONFIGURE_FILE (${CMAKE_CURRENT_SOURCE_DIR}/src/config.cmake.h
 
 LIST(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/Modules")
 
+if (NOT SNAPPY_OPTION)
+    # Disable snappy by default if not given.
+    set(SNAPPY_OPTION "Disable")
+endif ()
+
+
 if (COUCHBASE_SERVER_BUILD)
     ADD_DEFINITIONS(-D_DOC_COMP=1)
     include_directories(AFTER ${SNAPPY_INCLUDE_DIR})
