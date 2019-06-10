@@ -3712,6 +3712,87 @@ fdb_status fdb_get_byoffset(fdb_kvs_handle *handle, fdb_doc *doc)
     return FDB_RESULT_SUCCESS;
 }
 
+LIBFDB_API
+fdb_status fdb_get_byoffset_raw(fdb_kvs_handle *handle, fdb_doc *doc)
+{
+    if (!handle) {
+        return FDB_RESULT_INVALID_HANDLE;
+    }
+
+    if (!doc) {
+        return FDB_RESULT_INVALID_ARGS;
+    }
+
+    uint64_t offset = doc->offset;
+    struct docio_object _doc;
+
+    if (!offset || offset == BLK_NOT_FOUND) {
+        return FDB_RESULT_INVALID_ARGS;
+    }
+
+    if (!atomic_cas_uint8_t(&handle->handle_busy, 0, 1)) {
+        return FDB_RESULT_HANDLE_BUSY;
+    }
+
+    atomic_incr_uint64_t(&handle->op_stats->num_gets, std::memory_order_relaxed);
+    memset(&_doc, 0, sizeof(struct docio_object));
+
+    int64_t _offset = docio_read_doc(handle->dhandle, offset, &_doc, true);
+    if (_offset <= 0 || !_doc.key || (_doc.length.flag & DOCIO_TXN_COMMITTED)) {
+        atomic_cas_uint8_t(&handle->handle_busy, 1, 0);
+        return _offset < 0 ? (fdb_status)_offset : FDB_RESULT_KEY_NOT_FOUND;
+    }
+
+    if (handle->kvs) {
+        fdb_kvs_id_t kv_id;
+        buf2kvid(handle->config.chunksize, _doc.key, &kv_id);
+        if (kv_id != handle->kvs->id) {
+            atomic_cas_uint8_t(&handle->handle_busy, 1, 0);
+            free_docio_object(&_doc, 1, 1, 1);
+            return FDB_RESULT_KEY_NOT_FOUND;
+        }
+        _remove_kv_id(handle, &_doc);
+    }
+
+    doc->seqnum = _doc.seqnum;
+    doc->keylen = _doc.length.keylen;
+    doc->metalen = _doc.length.metalen;
+    doc->bodylen = _doc.length.bodylen;
+    if (doc->key) {
+        free(_doc.key);
+    } else {
+        doc->key = _doc.key;
+    }
+    if (doc->meta) {
+        free(_doc.meta);
+    } else {
+        doc->meta = _doc.meta;
+    }
+    if (doc->body) {
+        if (_doc.length.bodylen > 0) {
+            memcpy(doc->body, _doc.body, _doc.length.bodylen);
+        }
+        free(_doc.body);
+    } else {
+        doc->body = _doc.body;
+    }
+    doc->deleted = _doc.length.flag & DOCIO_DELETED;
+    doc->size_ondisk = _fdb_get_docsize(_doc.length);
+    if (handle->kvs) {
+        // Since _doc.length was adjusted in _remove_kv_id(),
+        // we need to compensate it.
+        doc->size_ondisk += handle->config.chunksize;
+    }
+
+    if (_doc.length.flag & DOCIO_DELETED) {
+        atomic_cas_uint8_t(&handle->handle_busy, 1, 0);
+        return FDB_RESULT_KEY_NOT_FOUND;
+    }
+
+    atomic_cas_uint8_t(&handle->handle_busy, 1, 0);
+    return FDB_RESULT_SUCCESS;
+}
+
 INLINE uint64_t _fdb_get_wal_threshold(fdb_kvs_handle *handle)
 {
     return handle->config.wal_threshold;

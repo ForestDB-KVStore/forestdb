@@ -312,6 +312,18 @@ fdb_status fdb_get_byoffset(fdb_kvs_handle *handle,
                             fdb_doc *doc);
 
 /**
+ * Same as above, but does not need to call `metaonly` prior to this.
+ *
+ * @param handle Pointer to ForestDB KV store handle.
+ * @param doc Pointer to ForestDB doc instance that contains the offset to a doc
+ *        and whose contents are populated as results of this API call.
+ * @return FDB_RESULT_SUCCESS on success.
+ */
+LIBFDB_API
+fdb_status fdb_get_byoffset_raw(fdb_kvs_handle *handle,
+                                fdb_doc *doc);
+
+/**
  * Update the metadata and doc body for a given key.
  * Note that FDB_DOC instance should be created by calling
  * fdb_doc_create(doc, key, keylen, meta, metalen, body, bodylen) before using
