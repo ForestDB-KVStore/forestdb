@@ -420,6 +420,17 @@ LIBFDB_API
 fdb_status fdb_commit(fdb_file_handle *fhandle, fdb_commit_opt_t opt);
 
 /**
+ * Same as `fdb_commit`, but does not call `fsync` internally.
+ *
+ * @param fhandle Pointer to ForestDB file handle.
+ * @param opt Commit option.
+ * @return FDB_RESULT_SUCCESS on success.
+ */
+LIBFDB_API
+fdb_status fdb_commit_non_durable(fdb_file_handle *fhandle,
+                                  fdb_commit_opt_t opt);
+
+/**
  * Flush dirty blocks and then call fsync().
  *
  * @param fhandle Pointer to ForestDB file handle.

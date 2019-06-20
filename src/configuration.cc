@@ -114,6 +114,9 @@ fdb_config get_default_config(void) {
     // Disable bulk load mode.
     fconfig.bulk_load_mode = false;
 
+    // WAL data should be visiable by default.
+    fconfig.do_not_search_wal = false;
+
     return fconfig;
 }
 

@@ -3078,12 +3078,16 @@ fdb_status fdb_get(fdb_kvs_handle *handle, fdb_doc *doc)
     wal_file = handle->file;
     dhandle = handle->dhandle;
 
-    if (handle->kvs) {
-        wr = wal_find(txn, wal_file, &cmp_info, handle->shandle, &doc_kv,
-                      &offset);
+    if (handle->config.do_not_search_wal) {
+        wr = FDB_RESULT_KEY_NOT_FOUND;
     } else {
-        wr = wal_find(txn, wal_file, &cmp_info, handle->shandle, doc,
-                      &offset);
+        if (handle->kvs) {
+            wr = wal_find(txn, wal_file, &cmp_info, handle->shandle, &doc_kv,
+                          &offset);
+        } else {
+            wr = wal_find(txn, wal_file, &cmp_info, handle->shandle, doc,
+                          &offset);
+        }
     }
 
     if (!handle->shandle) {
@@ -3215,11 +3219,15 @@ fdb_status fdb_get_metaonly(fdb_kvs_handle *handle, fdb_doc *doc)
     wal_file = handle->file;
     dhandle = handle->dhandle;
 
-    if (handle->kvs) {
-        wr = wal_find(txn, wal_file, &cmp_info, handle->shandle, &doc_kv,
-                      &offset);
+    if (handle->config.do_not_search_wal) {
+        wr = FDB_RESULT_KEY_NOT_FOUND;
     } else {
-        wr = wal_find(txn, wal_file, &cmp_info, handle->shandle, doc, &offset);
+        if (handle->kvs) {
+            wr = wal_find(txn, wal_file, &cmp_info, handle->shandle, &doc_kv,
+                          &offset);
+        } else {
+            wr = wal_find(txn, wal_file, &cmp_info, handle->shandle, doc, &offset);
+        }
     }
 
     if (!handle->shandle) {
@@ -3339,11 +3347,16 @@ fdb_status fdb_get_byseq(fdb_kvs_handle *handle, fdb_doc *doc)
     // prevent searching by key in WAL if 'doc' is not empty
     size_t key_len = doc->keylen;
     doc->keylen = 0;
-    if (handle->kvs) {
-        wr = wal_find_kv_id(txn, wal_file, handle->kvs->id, &cmp_info,
-                            handle->shandle, doc, &offset);
+
+    if (handle->config.do_not_search_wal) {
+        wr = FDB_RESULT_KEY_NOT_FOUND;
     } else {
-        wr = wal_find(txn, wal_file, &cmp_info, handle->shandle, doc, &offset);
+        if (handle->kvs) {
+            wr = wal_find_kv_id(txn, wal_file, handle->kvs->id, &cmp_info,
+                                handle->shandle, doc, &offset);
+        } else {
+            wr = wal_find(txn, wal_file, &cmp_info, handle->shandle, doc, &offset);
+        }
     }
 
     doc->keylen = key_len;
@@ -4333,8 +4346,21 @@ fdb_status fdb_commit(fdb_file_handle *fhandle, fdb_commit_opt_t opt)
         return FDB_RESULT_INVALID_HANDLE;
     }
 
-    return _fdb_commit(fhandle->root, opt,
-            !(fhandle->root->config.durability_opt & FDB_DRB_ASYNC));
+    return _fdb_commit( fhandle->root,
+                        opt,
+                       !( fhandle->root->config.durability_opt &
+                          FDB_DRB_ASYNC ) );
+}
+
+LIBFDB_API
+fdb_status fdb_commit_non_durable(fdb_file_handle *fhandle,
+                                  fdb_commit_opt_t opt)
+{
+    if (!fhandle) {
+        return FDB_RESULT_INVALID_HANDLE;
+    }
+
+    return _fdb_commit( fhandle->root, opt, false );
 }
 
 fdb_status _fdb_commit(fdb_kvs_handle *handle,

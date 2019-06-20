@@ -541,6 +541,10 @@ typedef struct {
      * write only, no reads, build index at the end.
      */
     bool bulk_load_mode;
+    /**
+     * If true, WAL data will not be visible to search operations.
+     */
+    bool do_not_search_wal;
 } fdb_config;
 
 typedef struct {
