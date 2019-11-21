@@ -2646,6 +2646,11 @@ INLINE fdb_status _fdb_wal_flush_func(void *voidhandle,
     int64_t nlivenodes = handle->bhandle->nlivenodes;
     int64_t ndeltanodes = handle->bhandle->ndeltanodes;
 
+    struct docio_length approx_doc_len;
+    approx_doc_len.keylen = item->header->keylen;
+    approx_doc_len.bodylen = approx_doc_len.bodylen_ondisk = item->doc_size;
+    approx_doc_len.metalen = 0;
+
     if (item->action == WAL_ACT_INSERT ||
         item->action == WAL_ACT_LOGICAL_REMOVE) {
         _offset = _endian_encode(item->offset);
@@ -2697,8 +2702,8 @@ INLINE fdb_status _fdb_wal_flush_func(void *voidhandle,
             } else { // inserted a logical deleted doc into main index
                 ++kvs_delta_stat->ndeletes;
             }
-            kvs_delta_stat->datasize += item->doc_size;
-            kvs_delta_stat->deltasize += item->doc_size;
+            kvs_delta_stat->datasize += _fdb_get_docsize(approx_doc_len);
+            kvs_delta_stat->deltasize += _fdb_get_docsize(approx_doc_len);
         } else { // update or logical delete
             // This block is already cached when we call HBTRIE_INSERT.
             // No additional block access.
@@ -2729,13 +2734,14 @@ INLINE fdb_status _fdb_wal_flush_func(void *voidhandle,
                 } // else no change (prev doc was deleted, now re-deleted)
             }
 
-            delta = (int)item->doc_size - (int)_fdb_get_docsize(_doc.length);
+            delta = (int)_fdb_get_docsize(approx_doc_len) -
+                    (int)_fdb_get_docsize(_doc.length);
             kvs_delta_stat->datasize += delta;
             bid_t last_hdr_bid = atomic_get_uint64_t(&handle->last_hdr_bid);
             if (last_hdr_bid * handle->config.blocksize < old_offset) {
                 kvs_delta_stat->deltasize += delta;
             } else {
-                kvs_delta_stat->deltasize += (int)item->doc_size;
+                kvs_delta_stat->deltasize += (int)_fdb_get_docsize(approx_doc_len);;
             }
 
             // Avoid duplicates (remove previous sequence number)

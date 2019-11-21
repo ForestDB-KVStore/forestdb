@@ -3694,10 +3694,19 @@ void _kvs_stat_set(struct filemgr *file,
     }
 }
 
+static void _safe_add(uint64_t& src, int64_t& delta) {
+    // Avoid overflow.
+    if (delta < 0 && (int64_t)src + delta < 0) {
+        src = 0;
+    } else {
+        src += delta;
+    }
+}
+
 void _kvs_stat_update_attr(struct filemgr *file,
                            fdb_kvs_id_t kv_id,
                            kvs_stat_attr_t attr,
-                           int delta)
+                           int64_t delta)
 {
     spin_t *lock = NULL;
     struct kvs_stat *stat;
@@ -3725,17 +3734,17 @@ void _kvs_stat_update_attr(struct filemgr *file,
     }
 
     if (attr == KVS_STAT_DATASIZE) {
-        stat->datasize += delta;
+        _safe_add(stat->datasize, delta);
     } else if (attr == KVS_STAT_NDOCS) {
-        stat->ndocs += delta;
+        _safe_add(stat->ndocs, delta);
     } else if (attr == KVS_STAT_NDELETES) {
-        stat->ndeletes += delta;
+        _safe_add(stat->ndeletes, delta);
     } else if (attr == KVS_STAT_NLIVENODES) {
-        stat->nlivenodes += delta;
+        _safe_add(stat->nlivenodes, delta);
     } else if (attr == KVS_STAT_WAL_NDELETES) {
-        stat->wal_ndeletes += delta;
+        _safe_add(stat->wal_ndeletes, delta);
     } else if (attr == KVS_STAT_WAL_NDOCS) {
-        stat->wal_ndocs += delta;
+        _safe_add(stat->wal_ndocs, delta);
     } else if (attr == KVS_STAT_DELTASIZE) {
         stat->deltasize += delta;
     }

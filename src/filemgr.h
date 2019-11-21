@@ -879,7 +879,7 @@ void _kvs_stat_set(struct filemgr *file,
 void _kvs_stat_update_attr(struct filemgr *file,
                            fdb_kvs_id_t kv_id,
                            kvs_stat_attr_t attr,
-                           int delta);
+                           int64_t delta);
 int _kvs_stat_get_kv_header(struct kvs_header *kv_header,
                             fdb_kvs_id_t kv_id,
                             struct kvs_stat *stat);
