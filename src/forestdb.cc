@@ -2994,6 +2994,10 @@ fdb_status fdb_check_file_reopen(fdb_kvs_handle *handle, file_status_t *status)
 
 static void _fdb_sync_dirty_root(fdb_kvs_handle *handle)
 {
+    if (handle->config.do_not_search_wal) {
+        return;
+    }
+
     bid_t dirty_idtree_root = BLK_NOT_FOUND;
     bid_t dirty_seqtree_root = BLK_NOT_FOUND;
 
