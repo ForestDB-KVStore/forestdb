@@ -77,6 +77,7 @@ struct filemgr_config {
                               atomic_get_uint64_t(&config.num_keeping_headers,
                                                   std::memory_order_relaxed),
                               std::memory_order_relaxed);
+        do_not_cache_doc_blocks = config.do_not_cache_doc_blocks;
         return *this;
     }
 
@@ -96,6 +97,7 @@ struct filemgr_config {
     // Number of the last commit headders whose stale blocks should
     // be kept for snapshot readers.
     atomic_uint64_t num_keeping_headers;
+    bool do_not_cache_doc_blocks;
 };
 
 #ifndef _LATENCY_STATS

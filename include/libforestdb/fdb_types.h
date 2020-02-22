@@ -545,6 +545,10 @@ typedef struct {
      * If true, WAL data will not be visible to search operations.
      */
     bool do_not_search_wal;
+    /**
+     * If true, blocks containing actual document will not be cached.
+     */
+    bool do_not_cache_doc_blocks;
 } fdb_config;
 
 typedef struct {

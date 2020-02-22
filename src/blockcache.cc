@@ -73,6 +73,8 @@ static uint64_t bcache_nblock;
 static int bcache_blocksize;
 static size_t bcache_flush_unit;
 
+static bcache_config bcache_global_config;
+
 struct bcache_shard {
     spin_t lock;
     // list for clean blocks
@@ -609,14 +611,25 @@ static fdb_status _flush_dirty_blocks(struct fnamedic_item *fname_item,
         // move to the shard clean block list.
         prevhead = fname_item->shards[shard_num].cleanlist.head;
         (void)prevhead;
-        list_push_front(&fname_item->shards[shard_num].cleanlist,
-                        &dirty_block->item->list_elem);
 
-        fdb_assert(!(dirty_block->item->flag & BCACHE_FREE),
-                   dirty_block->item->flag, BCACHE_FREE);
-        fdb_assert(dirty_block->item->list_elem.prev == NULL &&
-                   prevhead == dirty_block->item->list_elem.next,
-                   prevhead, dirty_block->item->list_elem.next);
+        uint8_t marker = *((uint8_t*)(dirty_block->item->addr) + bcache_blocksize-1);
+        if ( bcache_global_config.do_not_cache_doc_blocks &&
+             marker != BLK_MARKER_BNODE ) {
+            // If caching option is ON, and not a B-tree node, push back.
+            list_push_back(&fname_item->shards[shard_num].cleanlist,
+                            &dirty_block->item->list_elem);
+        } else {
+            // B-tree node, push front.
+            list_push_front(&fname_item->shards[shard_num].cleanlist,
+                            &dirty_block->item->list_elem);
+
+            fdb_assert(!(dirty_block->item->flag & BCACHE_FREE),
+                       dirty_block->item->flag, BCACHE_FREE);
+            fdb_assert(dirty_block->item->list_elem.prev == NULL &&
+                       prevhead == dirty_block->item->list_elem.next,
+                       prevhead, dirty_block->item->list_elem.next);
+        }
+
         mempool_free(dirty_block);
 
         if (!(sync && o_direct)) {
@@ -721,7 +734,10 @@ static struct list_elem * _bcache_evict(struct fnamedic_item *curfile)
             item = _get_entry(e, struct bcache_item, list_elem);
 #ifdef __BCACHE_SECOND_CHANCE
             // repeat until zero-score item is found
-            if (item->score == 0) {
+            // If `do not cache doc blocks` option is on, second chance
+            // policy is disabled.
+            if ( item->score == 0 ||
+                 bcache_global_config.do_not_cache_doc_blocks ) {
                 found_victim_shard = true;
                 break;
             } else {
@@ -1386,7 +1402,7 @@ fdb_status bcache_flush(struct filemgr *file)
     return status;
 }
 
-void bcache_init(int nblock, int blocksize)
+void bcache_init(int nblock, int blocksize, const bcache_config& bconfig)
 {
     int i;
     struct bcache_item *item;
@@ -1402,6 +1418,7 @@ void bcache_init(int nblock, int blocksize)
     bcache_blocksize = blocksize;
     bcache_flush_unit = BCACHE_FLUSH_UNIT;
     bcache_nblock = nblock;
+    bcache_global_config = bconfig;
     spin_init(&bcache_lock);
     spin_init(&freelist_lock);
 
@@ -1438,8 +1455,12 @@ void bcache_init(int nblock, int blocksize)
     long elapsed = (end.tv_sec - begin.tv_sec) * 1000000 + (end.tv_usec - begin.tv_usec);
     fdb_log(NULL, FDB_LOG_INFO, FDB_RESULT_SUCCESS,
             "Forestdb blockcache size %" _F64
-            " initialized in %ld us\n",
-            (uint64_t)bcache_blocksize * nblock, elapsed);
+            " cache %s, initialized in %ld us\n",
+            (uint64_t)bcache_blocksize * nblock,
+            ( bcache_global_config.do_not_cache_doc_blocks
+              ? "DO NOT CACHE DOC BLOCKS"
+              : "SECOND CHANCE" ),
+            elapsed);
 }
 
 uint64_t bcache_get_num_free_blocks()

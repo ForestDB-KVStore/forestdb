@@ -117,6 +117,9 @@ fdb_config get_default_config(void) {
     // WAL data should be visiable by default.
     fconfig.do_not_search_wal = false;
 
+    // Document blocks are cached by default.
+    fconfig.do_not_cache_doc_blocks = false;
+
     return fconfig;
 }
 

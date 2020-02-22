@@ -29,7 +29,12 @@ typedef enum {
     BCACHE_REQ_DIRTY
 } bcache_dirty_t;
 
-void bcache_init(int nblock, int blocksize);
+struct bcache_config {
+    bcache_config() : do_not_cache_doc_blocks(false) {}
+    bool do_not_cache_doc_blocks;
+};
+
+void bcache_init(int nblock, int blocksize, const bcache_config& bconfig);
 int bcache_read(struct filemgr *file, bid_t bid, void *buf);
 bool bcache_invalidate_block(struct filemgr *file, bid_t bid);
 int bcache_write(struct filemgr *file, bid_t bid, void *buf,

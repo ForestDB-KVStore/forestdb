@@ -209,8 +209,13 @@ void filemgr_init(struct filemgr_config *config)
             memset(&sb_ops, 0x0, sizeof(sb_ops));
             global_config = *config;
 
-            if (global_config.ncacheblock > 0)
-                bcache_init(global_config.ncacheblock, global_config.blocksize);
+            bcache_config bconfig;
+            bconfig.do_not_cache_doc_blocks = global_config.do_not_cache_doc_blocks;
+            if (global_config.ncacheblock > 0) {
+                bcache_init(global_config.ncacheblock,
+                            global_config.blocksize,
+                            bconfig);
+            }
 
             hash_init(&hash, NBUCKET, _file_hash, _file_cmp);
 
@@ -2026,7 +2031,16 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
                 return status;
             }
 
-            r = bcache_write(file, bid, buf, BCACHE_REQ_CLEAN, false);
+            uint8_t marker = *((uint8_t*)buf + file->blocksize - 1);
+            if ( global_config.do_not_cache_doc_blocks &&
+                 marker != BLK_MARKER_BNODE ) {
+                // If caching option is ON, and not a B-tree block,
+                // we do not put it into cache.
+                r = global_config.blocksize;
+            } else {
+                r = bcache_write(file, bid, buf, BCACHE_REQ_CLEAN, false);
+            }
+
             if (r != global_config.blocksize) {
                 if (locked) {
                     plock_unlock(&file->plock, plock_entry);
