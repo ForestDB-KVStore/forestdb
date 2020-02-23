@@ -912,6 +912,8 @@ struct kvs_ops_stat *filemgr_get_ops_stats(struct filemgr *file,
 fdb_status convert_errno_to_fdb_status(int errno_value,
                                        fdb_status default_status);
 
+void _print_cache_stats();
+
 #ifdef __cplusplus
 }
 #endif

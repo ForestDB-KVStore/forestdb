@@ -15,6 +15,8 @@
  *   limitations under the License.
  */
 
+#include <sstream>
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
@@ -615,9 +617,13 @@ static fdb_status _flush_dirty_blocks(struct fnamedic_item *fname_item,
         uint8_t marker = *((uint8_t*)(dirty_block->item->addr) + bcache_blocksize-1);
         if ( bcache_global_config.do_not_cache_doc_blocks &&
              marker != BLK_MARKER_BNODE ) {
-            // If caching option is ON, and not a B-tree node, push back.
-            list_push_back(&fname_item->shards[shard_num].cleanlist,
-                            &dirty_block->item->list_elem);
+            // If caching option is ON, and not a B-tree node, free here.
+            atomic_decr_uint64_t(&fname_item->nitems);
+            // remove from hash and insert into freelist
+            hash_remove( &fname_item->shards[shard_num].hashtable,
+                         &dirty_block->item->hash_elem );
+            // add to freelist
+            _bcache_release_freeblock(dirty_block->item);
         } else {
             // B-tree node, push front.
             list_push_front(&fname_item->shards[shard_num].cleanlist,
@@ -1487,9 +1493,14 @@ uint64_t bcache_get_num_immutable(struct filemgr *file)
 
 }
 
+#define BCACHE_LOG(...) fdb_log(NULL, FDB_LOG_INFO, FDB_RESULT_SUCCESS, __VA_ARGS__)
+#define ADD2BUF(...) snprintf(tmp_buf, 4095, __VA_ARGS__); ss << tmp_buf
+
 // LCOV_EXCL_START
 void bcache_print_items()
 {
+    std::stringstream ss;
+    char tmp_buf[4096];
     size_t n=1;
     size_t nfiles, nitems, nfileitems, nclean, ndirty;
     size_t scores[100], i, scores_local[100];
@@ -1507,16 +1518,16 @@ void bcache_print_items()
     struct list_elem *ee;
     struct avl_node *a;
 
-    printf(" === Block cache statistics summary ===\n");
-    printf("%3s %20s (%6s)(%6s)(c%6s d%6s)",
+    ADD2BUF(" === Block cache statistics summary ===\n");
+    ADD2BUF("%3s %20s (%6s)(%6s)(c%6s d%6s)",
         "No", "Filename", "#Pages", "#Evict", "Clean", "Dirty");
 #ifdef __CRC32
-    printf("%6s%6s", "Doc", "Node");
+    ADD2BUF("%6s%6s", "Doc", "Node");
 #endif
     for (i=0;i<=n;++i) {
-        printf("   [%d] ", (int)i);
+        ADD2BUF("   [%d] ", (int)i);
     }
-    printf("\n");
+    ADD2BUF("\n");
 
     for (size_t idx = 0; idx < num_files; ++idx) {
         fname = file_list[idx];
@@ -1572,30 +1583,32 @@ void bcache_print_items()
             }
         }
 
-        printf("%3d %20s (%6d)(%6d)(c%6d d%6d)",
+        ADD2BUF("%3d %20s (%6d)(%6d)(c%6d d%6d)",
                (int)nfiles+1, fname->filename,
                (int)atomic_get_uint64_t(&fname->nitems),
                (int)atomic_get_uint64_t(&fname->nvictim),
                (int)nclean, (int)ndirty);
-        printf("%6d%6d", (int)docs_local, (int)bnodes_local);
+        ADD2BUF("%6d%6d", (int)docs_local, (int)bnodes_local);
         for (i=0;i<=n;++i){
-            printf("%6d ", (int)scores_local[i]);
+            ADD2BUF("%6d ", (int)scores_local[i]);
         }
-        printf("\n");
+        ADD2BUF("\n");
 
         docs += docs_local;
         bnodes += bnodes_local;
 
         nfiles++;
     }
-    printf(" ===\n");
+    ADD2BUF(" ===\n");
 
-    printf("%d files %d items\n", (int)nfiles, (int)nitems);
+    ADD2BUF("%d files %d items\n", (int)nfiles, (int)nitems);
     for (i=0;i<=n;++i){
-        printf("[%d]: %d\n", (int)i, (int)scores[i]);
+        ADD2BUF("[%d]: %d\n", (int)i, (int)scores[i]);
     }
-    printf("Documents: %d blocks\n", (int)docs);
-    printf("Index nodes: %d blocks\n", (int)bnodes);
+    ADD2BUF("Documents: %d blocks\n", (int)docs);
+    ADD2BUF("Index nodes: %d blocks\n", (int)bnodes);
+
+    BCACHE_LOG("%s", ss.str().c_str());
 }
 // LCOV_EXCL_STOP
 

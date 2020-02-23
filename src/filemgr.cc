@@ -4218,3 +4218,9 @@ fdb_status convert_errno_to_fdb_status(int errno_value,
         return default_status;
     }
 }
+
+void _print_cache_stats() {
+    bcache_print_items();
+}
+
+

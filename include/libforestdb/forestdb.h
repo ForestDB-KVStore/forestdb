@@ -440,6 +440,14 @@ LIBFDB_API
 fdb_status fdb_sync_file(fdb_file_handle *fhandle);
 
 /**
+ * Print detailed stats of block cache into log.
+ *
+ * @return FDB_RESULT_SUCCESS on success.
+ */
+LIBFDB_API
+fdb_status fdb_print_cache_stats();
+
+/**
  * Create a snapshot of a KV store.
  *
  * @param handle_in ForestDB KV store handle pointer from which snapshot is to be made

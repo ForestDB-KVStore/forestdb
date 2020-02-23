@@ -4352,6 +4352,12 @@ fdb_status fdb_sync_file(fdb_file_handle *fhandle) {
 }
 
 LIBFDB_API
+fdb_status fdb_print_cache_stats() {
+    _print_cache_stats();
+    return FDB_RESULT_SUCCESS;
+}
+
+LIBFDB_API
 fdb_status fdb_commit(fdb_file_handle *fhandle, fdb_commit_opt_t opt)
 {
     if (!fhandle) {
