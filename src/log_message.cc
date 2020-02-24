@@ -86,7 +86,7 @@ fdb_status fdb_log_impl(err_log_callback* log_callback,
     char msg[4096];
     va_list args;
     va_start(args, format);
-    vsprintf(msg, format, args);
+    vsnprintf(msg, 4095, format, args);
     va_end(args);
 
     if (log_callback && log_callback->callback_ex) {

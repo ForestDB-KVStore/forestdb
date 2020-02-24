@@ -1494,12 +1494,13 @@ uint64_t bcache_get_num_immutable(struct filemgr *file)
 }
 
 #define BCACHE_LOG(...) fdb_log(NULL, FDB_LOG_INFO, FDB_RESULT_SUCCESS, __VA_ARGS__)
-#define ADD2BUF(...) snprintf(tmp_buf, 4095, __VA_ARGS__); ss << tmp_buf
+#define ADD2BUF(...) snprintf(tmp_buf, 4095, __VA_ARGS__); ss_local += tmp_buf
 
 // LCOV_EXCL_START
 void bcache_print_items()
 {
-    std::stringstream ss;
+    std::string ss;
+    std::string ss_local;
     char tmp_buf[4096];
     size_t n=1;
     size_t nfiles, nitems, nfileitems, nclean, ndirty;
@@ -1529,6 +1530,7 @@ void bcache_print_items()
     }
     ADD2BUF("\n");
 
+    reader_lock(&filelist_lock);
     for (size_t idx = 0; idx < num_files; ++idx) {
         fname = file_list[idx];
         memset(scores_local, 0, sizeof(size_t)*100);
@@ -1537,6 +1539,7 @@ void bcache_print_items()
 
         size_t i = 0;
         for (; i < fname->num_shards; ++i) {
+            spin_lock(&fname->shards[i].lock);
             ee = list_begin(&fname->shards[i].cleanlist);
             a = avl_first(&fname->shards[i].tree);
 
@@ -1581,6 +1584,7 @@ void bcache_print_items()
 #endif
                 a = avl_next(a);
             }
+            spin_unlock(&fname->shards[i].lock);
         }
 
         ADD2BUF("%3d %20s (%6d)(%6d)(c%6d d%6d)",
@@ -1598,7 +1602,15 @@ void bcache_print_items()
         bnodes += bnodes_local;
 
         nfiles++;
+
+        if (ss.size() + ss_local.size() > 4000) {
+            BCACHE_LOG("%s", ss.c_str());
+            ss.clear();
+        }
+        ss += ss_local;
+        ss_local.clear();
     }
+    reader_unlock(&filelist_lock);
     ADD2BUF(" ===\n");
 
     ADD2BUF("%d files %d items\n", (int)nfiles, (int)nitems);
@@ -1608,7 +1620,13 @@ void bcache_print_items()
     ADD2BUF("Documents: %d blocks\n", (int)docs);
     ADD2BUF("Index nodes: %d blocks\n", (int)bnodes);
 
-    BCACHE_LOG("%s", ss.str().c_str());
+    if (ss.size() + ss_local.size() > 4000) {
+        BCACHE_LOG("%s", ss.c_str());
+        ss.clear();
+    }
+    ss += ss_local;
+    ss_local.clear();
+    BCACHE_LOG("%s", ss.c_str());
 }
 // LCOV_EXCL_STOP
 
