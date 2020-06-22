@@ -1461,11 +1461,12 @@ void bcache_init(int nblock, int blocksize, const bcache_config& bconfig)
     long elapsed = (end.tv_sec - begin.tv_sec) * 1000000 + (end.tv_usec - begin.tv_usec);
     fdb_log(NULL, FDB_LOG_INFO, FDB_RESULT_SUCCESS,
             "Forestdb blockcache size %" _F64
-            " cache %s, initialized in %ld us\n",
+            " cache %s, num buckets per file %zu, initialized in %ld us\n",
             (uint64_t)bcache_blocksize * nblock,
             ( bcache_global_config.do_not_cache_doc_blocks
               ? "DO NOT CACHE DOC BLOCKS"
               : "SECOND CHANCE" ),
+            BCACHE_NBUCKET,
             elapsed);
 }
 

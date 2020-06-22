@@ -63,6 +63,15 @@ static void fdb_add_inmem_stale_info(fdb_kvs_handle *handle,
     struct stale_info_commit *item, query;
     struct stale_info_entry *entry;
 
+    if (file && file->config) {
+        if ( file->config->block_reusing_threshold == 0 ||
+             file->config->block_reusing_threshold == 100 ) {
+            // Block reuse is disabled,
+            // we don't need to maintain stale info in-memory.
+            return;
+        }
+    }
+
     // search using revnum first
     query.revnum = revnum;
     a = avl_search(&file->stale_info_tree, &query.avl, _inmem_stale_cmp);
