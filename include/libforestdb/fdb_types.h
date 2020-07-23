@@ -678,7 +678,8 @@ typedef struct {
      */
     uint64_t deleted_count;
     /**
-     * Disk space actively used by the file.
+     * Disk space actively used by the file, including the space
+     * occupied by index nodes.
      */
     uint64_t space_used;
     /**
@@ -693,6 +694,10 @@ typedef struct {
      * Revision number of Superblock's bitmap.
      */
     uint64_t sb_bmp_revnum;
+    /**
+     * Total number of live index nodes across all KV stores.
+     */
+    uint64_t num_live_nodes;
 } fdb_file_info;
 
 /**

@@ -8144,6 +8144,7 @@ fdb_status fdb_get_file_info(fdb_file_handle *fhandle, fdb_file_info *info)
 
     info->space_used = fdb_estimate_space_used(fhandle);
     info->file_size = filemgr_get_pos(handle->file);
+    info->num_live_nodes = _kvs_stat_get_sum(handle->file, KVS_STAT_NLIVENODES);
 
     // Get the number of KV store instances in a given ForestDB file.
     struct kvs_header *kv_header = handle->file->kv_header;
