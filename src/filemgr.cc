@@ -1465,11 +1465,13 @@ fdb_status filemgr_close(struct filemgr *file, bool cleanup_cache_onclose,
     // remove filemgr structure if no thread refers to the file
     spin_lock(&file->lock);
     if (atomic_get_uint32_t(&file->ref_count) == 0) {
+        bool need_to_purge_dirty_blocks = false;
         if (global_config.ncacheblock > 0 &&
             atomic_get_uint8_t(&file->status) != FILE_REMOVED_PENDING) {
             spin_unlock(&file->lock);
             // discard all dirty blocks belonged to this file
-            bcache_remove_dirty_blocks(file);
+            need_to_purge_dirty_blocks = true;
+
         } else {
             // If the file is in pending removal (i.e., FILE_REMOVED_PENDING),
             // then its dirty block entries will be cleaned up in either
@@ -1477,9 +1479,16 @@ fdb_status filemgr_close(struct filemgr *file, bool cleanup_cache_onclose,
             spin_unlock(&file->lock);
         }
 
+        // WARNING: Closing WAL should be done before
+        //          purging dirty blocks.
         if (wal_is_initialized(file)) {
             wal_close(file, log_callback);
         }
+
+        if (need_to_purge_dirty_blocks) {
+            bcache_remove_dirty_blocks(file);
+        }
+
 #ifdef _LATENCY_STATS_DUMP_TO_FILE
         filemgr_dump_latency_stat(file, log_callback);
 #endif // _LATENCY_STATS_DUMP_TO_FILE
