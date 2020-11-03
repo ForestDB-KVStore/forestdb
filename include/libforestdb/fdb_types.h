@@ -632,6 +632,23 @@ enum {
 };
 
 /**
+ * ForestDB seek options for `fdb_get_nearest` operation.
+ */
+typedef uint8_t fdb_get_nearest_opt_t;
+enum {
+    /**
+     * If the exact match does not exist, find the smallest key greater than
+     * the given key.
+     */
+    FDB_GET_GREATER = 0x00,
+    /**
+     * If the exact match does not exist, find the greatest key smaller than
+     * the given key.
+     */
+    FDB_GET_SMALLER = 0x01
+};
+
+/**
  * Opaque reference to ForestDB iterator structure definition, which is exposed
  * in public APIs.
  */

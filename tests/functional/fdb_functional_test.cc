@@ -5009,6 +5009,171 @@ void kvs_deletion_without_commit()
     TEST_RESULT("KVS deletion without commit test");
 }
 
+void get_nearest_test()
+{
+
+    TEST_INIT();
+    int r;
+    fdb_status s; (void)s;
+
+    memleak_start();
+
+    // remove previous dummy files
+    r = system(SHELL_DEL" dummy* > errorlog.txt");
+    (void)r;
+
+    fdb_config config = fdb_get_default_config();
+    config.do_not_search_wal = true;
+
+    fdb_kvs_config kvs_config = fdb_get_default_kvs_config();
+
+    // create a file
+    fdb_file_handle *dbfile;
+    s = fdb_open(&dbfile, "dummy", &config);
+    TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+    fdb_kvs_handle *default_db;
+    s = fdb_kvs_open(dbfile, &default_db, NULL, &kvs_config);
+    TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+    char key[256];
+    char keystr[] = "key%06d";
+    char valuestr[] = "value%08d";
+
+    size_t value_len = 32;
+    char* value = (char*)malloc(value_len);
+    memset(value, 'x', value_len);
+    memcpy(value + value_len - 6, "<end>", 6);
+
+    const int NUM = 100;
+    for (size_t i=0; i<NUM;++i){
+        sprintf(key, keystr, i*10);
+        sprintf(value, valuestr, i);
+        s = fdb_set_kv(default_db, key, strlen(key), value, value_len);
+        TEST_CHK(s == FDB_RESULT_SUCCESS);
+    }
+    s = fdb_commit(dbfile, FDB_COMMIT_MANUAL_WAL_FLUSH);
+
+    {   // Exact match does not exist.
+        fdb_doc *doc;
+        int IDX = 50;
+        sprintf(key, keystr, IDX*10 + 5);
+        sprintf(value, valuestr, IDX);
+        fdb_doc_create(&doc, key, strlen(key), NULL, 0, NULL, 0);
+        s = fdb_get(default_db, doc);
+        TEST_CHK(s != FDB_RESULT_SUCCESS);
+        fdb_doc_free(doc);
+    }
+
+    for (int IDX = 0; IDX < NUM-1; ++IDX)
+    {   // Greater: should return next KV.
+        fdb_doc *doc;
+        sprintf(key, keystr, IDX*10 + 5);
+        sprintf(value, valuestr, IDX+1);
+        fdb_doc_create(&doc, NULL, 0, NULL, 0, NULL, 0);
+        s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_GREATER);
+        TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+        sprintf(key, keystr, (IDX+1)*10);
+        TEST_CMP(key, doc->key, strlen(key));
+        TEST_CMP(value, doc->body, value_len);
+
+        fdb_doc_free(doc);
+    }
+
+    for (int IDX = 0; IDX < NUM-1; ++IDX)
+    {   // Do the same thing with iterator: should return next KV.
+        fdb_doc *doc;
+        sprintf(key, keystr, IDX*10 + 5);
+        sprintf(value, valuestr, IDX+1);
+        fdb_doc_create(&doc, NULL, 0, NULL, 0, NULL, 0);
+        fdb_iterator* itr;
+        s = fdb_iterator_init(default_db, &itr, key, strlen(key), NULL, 0, 0x0);
+        TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+        s = fdb_iterator_get(itr, &doc);
+        TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+        sprintf(key, keystr, (IDX+1)*10);
+        TEST_CMP(key, doc->key, strlen(key));
+        TEST_CMP(value, doc->body, value_len);
+
+        fdb_doc_free(doc);
+    }
+
+    for (int IDX = 1; IDX < NUM; ++IDX)
+    {   // Smaller: should return prev KV.
+        fdb_doc *doc;
+        sprintf(key, keystr, IDX*10 - 5);
+        sprintf(value, valuestr, IDX-1);
+        fdb_doc_create(&doc, NULL, 0, NULL, 0, NULL, 0);
+        s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_SMALLER);
+        TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+        sprintf(key, keystr, (IDX-1)*10);
+        TEST_CMP(key, doc->key, strlen(key));
+        TEST_CMP(value, doc->body, value_len);
+
+        fdb_doc_free(doc);
+    }
+
+    {   // Greater than max: should return error.
+        fdb_doc *doc;
+        int IDX = NUM;
+        sprintf(key, keystr, IDX*10 + 5);
+        fdb_doc_create(&doc, NULL, 0, NULL, 0, NULL, 0);
+        s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_GREATER);
+        TEST_CHK(s != FDB_RESULT_SUCCESS);
+        fdb_doc_free(doc);
+    }
+
+    {   // Smaller than min: should return error.
+        fdb_doc *doc;
+        sprintf(key, "kee");
+        fdb_doc_create(&doc, NULL, 0, NULL, 0, NULL, 0);
+        s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_SMALLER);
+        TEST_CHK(s != FDB_RESULT_SUCCESS);
+        fdb_doc_free(doc);
+    }
+
+    for (int IDX = 0; IDX < NUM; ++IDX)
+    {   // Exact match with greater flag.
+        fdb_doc *doc;
+        sprintf(key, keystr, IDX*10);
+        sprintf(value, valuestr, IDX);
+        fdb_doc_create(&doc, NULL, 0, NULL, 0, NULL, 0);
+        s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_GREATER);
+        TEST_CHK(s == FDB_RESULT_SUCCESS);
+        TEST_CMP(key, doc->key, strlen(key));
+        TEST_CMP(value, doc->body, value_len);
+        fdb_doc_free(doc);
+    }
+
+    for (int IDX = 0; IDX < NUM; ++IDX)
+    {   // Exact match without greater flag.
+        fdb_doc *doc;
+        sprintf(key, keystr, IDX*10);
+        sprintf(value, valuestr, IDX);
+        fdb_doc_create(&doc, NULL, 0, NULL, 0, NULL, 0);
+        s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_SMALLER);
+        TEST_CHK(s == FDB_RESULT_SUCCESS);
+        TEST_CMP(key, doc->key, strlen(key));
+        TEST_CMP(value, doc->body, value_len);
+        fdb_doc_free(doc);
+    }
+
+    s = fdb_kvs_close(default_db);
+    TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+    s = fdb_close(dbfile);
+    TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+    s = fdb_shutdown();
+    memleak_end();
+
+    TEST_RESULT("get nearest test");
+}
+
 int main(){
     basic_test();
     init_test();
@@ -5066,6 +5231,7 @@ int main(){
     large_batch_write_no_commit_test();
     multi_thread_test(40*1024, 1024, 20, 1, 100, 2, 6);
     apis_with_invalid_handles_test();
+    get_nearest_test();
 
     return 0;
 }

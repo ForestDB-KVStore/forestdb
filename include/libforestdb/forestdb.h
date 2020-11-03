@@ -239,6 +239,32 @@ LIBFDB_API
 fdb_status fdb_get(fdb_kvs_handle *handle,
                    fdb_doc *doc);
 
+
+/**
+ * Retrieve the document for a given key.
+ * If the exact match does not exist, find the nearest key.
+ * Note that FDB_DOC instance should be created by calling
+ * fdb_doc_create(doc, NULL, 0, NULL, 0, NULL, 0) before using this API.
+ *
+ * @param handle Pointer to ForestDB KV store handle.
+ * @param key Pointer to the key to be retrieved.
+ * @param keylen Length of the key.
+ * @param doc Pointer to ForestDB doc instance whose contents
+ *        are populated as a result of this API call.
+ * @param opt
+ *        If `FDB_GET_GREATER`, find the smallest key greater than
+ *        the given one, if the exact match does not exist.
+ *        If `FDB_GET_SMALLER,` find the greatest key smaller than
+ *        the given one, if the exact match does not exist.
+ * @return FDB_RESULT_SUCCESS on success.
+ */
+LIBFDB_API
+fdb_status fdb_get_nearest(fdb_kvs_handle *handle,
+                           const void *key,
+                           size_t keylen,
+                           fdb_doc *doc,
+                           fdb_get_nearest_opt_t opt);
+
 /**
  * Retrieve the metadata for a given key.
  * Note that FDB_DOC instance should be created by calling

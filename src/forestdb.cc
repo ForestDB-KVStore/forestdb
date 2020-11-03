@@ -24,6 +24,8 @@
 #include <sys/time.h>
 #endif
 
+#include <vector>
+
 #include "libforestdb/forestdb.h"
 #include "fdb_internal.h"
 #include "filemgr.h"
@@ -3152,6 +3154,169 @@ fdb_status fdb_get(fdb_kvs_handle *handle, fdb_doc *doc)
             atomic_cas_uint8_t(&handle->handle_busy, 1, 0);
             return FDB_RESULT_KEY_NOT_FOUND;
         }
+
+        doc->seqnum = _doc.seqnum;
+        doc->metalen = _doc.length.metalen;
+        doc->bodylen = _doc.length.bodylen;
+        doc->meta = _doc.meta;
+        doc->body = _doc.body;
+        doc->deleted = _doc.length.flag & DOCIO_DELETED;
+        doc->size_ondisk = _fdb_get_docsize(_doc.length);
+        doc->offset = offset;
+
+        LATENCY_STAT_END(handle->file, FDB_LATENCY_GETS);
+        atomic_cas_uint8_t(&handle->handle_busy, 1, 0);
+        return FDB_RESULT_SUCCESS;
+    }
+
+    atomic_cas_uint8_t(&handle->handle_busy, 1, 0);
+    return FDB_RESULT_KEY_NOT_FOUND;
+}
+
+LIBFDB_API
+fdb_status fdb_get_nearest(fdb_kvs_handle *handle,
+                           const void *key,
+                           size_t keylen,
+                           fdb_doc *doc,
+                           fdb_get_nearest_opt_t opt)
+{
+    uint64_t offset;
+    int64_t _offset;
+    struct docio_object _doc;
+    struct docio_handle *dhandle;
+    hbtrie_result hr = HBTRIE_RESULT_FAIL;
+    fdb_txn *txn;
+    //fdb_doc doc_kv;
+    LATENCY_STAT_START();
+
+    if (!handle) {
+        return FDB_RESULT_INVALID_HANDLE;
+    }
+
+    if (!handle->config.do_not_search_wal) {
+        return FDB_RESULT_INVALID_CONFIG;
+    }
+
+    if (!doc || !key || keylen == 0 ||
+        keylen > FDB_MAX_KEYLEN ||
+        (handle->kvs_config.custom_cmp &&
+            keylen > handle->config.blocksize - HBTRIE_HEADROOM)) {
+        return FDB_RESULT_INVALID_ARGS;
+    }
+
+    if (!atomic_cas_uint8_t(&handle->handle_busy, 0, 1)) {
+        return FDB_RESULT_HANDLE_BUSY;
+    }
+
+    // Need to prepend 8-byte ID in multi-KVS mode.
+    void* doc_key = (void*)key;
+    size_t doc_keylen = keylen;
+
+    if (handle->kvs) {
+        // multi KV instance mode
+        int size_chunk = handle->config.chunksize;
+        doc_keylen = keylen + size_chunk;
+        doc_key = alca(uint8_t, doc_keylen);
+        kvid2buf(size_chunk, handle->kvs->id, doc_key);
+        memcpy((uint8_t*)doc_key + size_chunk, key, keylen);
+    }
+
+    if (!handle->shandle) {
+        fdb_check_file_reopen(handle, NULL);
+        txn = handle->fhandle->root->txn;
+        if (!txn) {
+            txn = &handle->file->global_txn;
+        }
+    } else {
+        txn = handle->shandle->snap_txn;
+    }
+
+    dhandle = handle->dhandle;
+
+    if (!handle->shandle) {
+        fdb_sync_db_header(handle);
+    }
+
+    atomic_incr_uint64_t(&handle->op_stats->num_gets, std::memory_order_relaxed);
+
+    _fdb_sync_dirty_root(handle);
+
+    struct hbtrie_iterator hit;
+
+    thread_local std::vector<char> ret_key_buf(FDB_MAX_KEYLEN_INTERNAL);
+    size_t ret_keylen = 0;
+
+    hr = hbtrie_iterator_init(handle->trie, &hit, doc_key, doc_keylen);
+    if (hr == HBTRIE_RESULT_SUCCESS) {
+        // NOTE: Due to HB-trie's suffix skip, may need to call prev/next
+        //       multiple times.
+        if (opt == FDB_GET_GREATER) {
+            do {
+                hr = hbtrie_next(&hit, &ret_key_buf[0], &ret_keylen, (void *)&offset);
+                int cmp = 0;
+                if (handle->kvs_config.custom_cmp) {
+                    cmp = handle->kvs_config.custom_cmp(
+                              doc_key, doc_keylen,
+                              &ret_key_buf[0], ret_keylen,
+                              handle->kvs_config.custom_cmp_param );
+                } else {
+                    cmp = _lex_keycmp( doc_key, doc_keylen,
+                                       &ret_key_buf[0], ret_keylen );
+                }
+                if (cmp <= 0) break;
+            } while (hr == HBTRIE_RESULT_SUCCESS);
+
+        } else {
+            do {
+                hr = hbtrie_prev(&hit, &ret_key_buf[0], &ret_keylen, (void *)&offset);
+                int cmp = 0;
+                if (handle->kvs_config.custom_cmp) {
+                    cmp = handle->kvs_config.custom_cmp(
+                              doc_key, doc_keylen,
+                              &ret_key_buf[0], ret_keylen,
+                              handle->kvs_config.custom_cmp_param );
+                } else {
+                    cmp = _lex_keycmp( doc_key, doc_keylen,
+                                       &ret_key_buf[0], ret_keylen );
+                }
+                if (cmp >= 0) break;
+            } while (hr == HBTRIE_RESULT_SUCCESS);
+        }
+        hbtrie_iterator_free(&hit);
+    }
+    btreeblk_end(handle->bhandle);
+    offset = _endian_decode(offset);
+
+    _fdb_release_dirty_root(handle);
+
+    if (hr == HBTRIE_RESULT_SUCCESS) {
+        _offset = docio_read_doc(dhandle, offset, &_doc, true);
+        if (_offset <= 0) {
+            atomic_cas_uint8_t(&handle->handle_busy, 1, 0);
+            return _offset < 0 ? (fdb_status)_offset : FDB_RESULT_KEY_NOT_FOUND;
+        }
+
+        if (_doc.length.keylen != doc_keylen ||
+            _doc.length.flag & DOCIO_DELETED) {
+            free_docio_object(&_doc, 1, 1, 1);
+            atomic_cas_uint8_t(&handle->handle_busy, 1, 0);
+            return FDB_RESULT_KEY_NOT_FOUND;
+        }
+
+        if (handle->kvs) {
+            fdb_kvs_id_t kv_id;
+            size_t size_chunk = handle->config.chunksize;
+            buf2kvid(size_chunk, _doc.key, &kv_id);
+            if (kv_id != handle->kvs->id) {
+                atomic_cas_uint8_t(&handle->handle_busy, 1, 0);
+                free_docio_object(&_doc, 1, 1, 1);
+                return FDB_RESULT_KEY_NOT_FOUND;
+            }
+            _doc.length.keylen -= size_chunk;
+            memmove(_doc.key, (uint8_t*)_doc.key + size_chunk, _doc.length.keylen);
+        }
+        doc->key = _doc.key;
+        doc->keylen = _doc.length.keylen;
 
         doc->seqnum = _doc.seqnum;
         doc->metalen = _doc.length.metalen;

@@ -343,6 +343,20 @@ INLINE void _fdb_dirty_update_finalize(fdb_kvs_handle *handle,
     }
 }
 
+INLINE int _lex_keycmp(void *key1, size_t keylen1, void *key2, size_t keylen2)
+{
+    if (keylen1 == keylen2) {
+        return memcmp(key1, key2, keylen1);
+    }else {
+        size_t len = MIN(keylen1, keylen2);
+        int cmp = memcmp(key1, key2, len);
+        if (cmp != 0) return cmp;
+        else {
+            return (int)((int)keylen1 - (int)keylen2);
+        }
+    }
+}
+
 #ifdef __cplusplus
 }
 #endif
