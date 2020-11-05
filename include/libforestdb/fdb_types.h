@@ -637,15 +637,23 @@ enum {
 typedef uint8_t fdb_get_nearest_opt_t;
 enum {
     /**
-     * If the exact match does not exist, find the smallest key greater than
-     * the given key.
+     * Find the exact match first. If the exact match does not exist,
+     * find the smallest key greater than the given key.
      */
-    FDB_GET_GREATER = 0x00,
+    FDB_GET_GREATER_OR_EQUAL = 0x00,
     /**
-     * If the exact match does not exist, find the greatest key smaller than
-     * the given key.
+     * Find the smallest key greater than the given key.
      */
-    FDB_GET_SMALLER = 0x01
+    FDB_GET_GREATER = 0x01,
+    /**
+     * Find the exact match first. If the exact match does not exist,
+     * find the greatest key smaller than the given key.
+     */
+    FDB_GET_SMALLER_OR_EQUAL = 0x02,
+    /**
+     * Find the greatest key smaller than the given key.
+     */
+    FDB_GET_SMALLER = 0x03
 };
 
 /**

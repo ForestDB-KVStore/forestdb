@@ -3250,7 +3250,7 @@ fdb_status fdb_get_nearest(fdb_kvs_handle *handle,
     if (hr == HBTRIE_RESULT_SUCCESS) {
         // NOTE: Due to HB-trie's suffix skip, may need to call prev/next
         //       multiple times.
-        if (opt == FDB_GET_GREATER) {
+        if (opt == FDB_GET_GREATER_OR_EQUAL || opt == FDB_GET_GREATER) {
             do {
                 hr = hbtrie_next(&hit, &ret_key_buf[0], &ret_keylen, (void *)&offset);
                 int cmp = 0;
@@ -3263,7 +3263,8 @@ fdb_status fdb_get_nearest(fdb_kvs_handle *handle,
                     cmp = _lex_keycmp( doc_key, doc_keylen,
                                        &ret_key_buf[0], ret_keylen );
                 }
-                if (cmp <= 0) break;
+                if (opt == FDB_GET_GREATER_OR_EQUAL && cmp <= 0) break;
+                if (opt == FDB_GET_GREATER && cmp < 0) break;
             } while (hr == HBTRIE_RESULT_SUCCESS);
 
         } else {
@@ -3279,7 +3280,8 @@ fdb_status fdb_get_nearest(fdb_kvs_handle *handle,
                     cmp = _lex_keycmp( doc_key, doc_keylen,
                                        &ret_key_buf[0], ret_keylen );
                 }
-                if (cmp >= 0) break;
+                if (opt == FDB_GET_SMALLER_OR_EQUAL && cmp >= 0) break;
+                if (opt == FDB_GET_SMALLER && cmp > 0) break;
             } while (hr == HBTRIE_RESULT_SUCCESS);
         }
         hbtrie_iterator_free(&hit);

@@ -5066,12 +5066,12 @@ void get_nearest_test()
     }
 
     for (int IDX = 0; IDX < NUM-1; ++IDX)
-    {   // Greater: should return next KV.
+    {   // Greater or equal: should return next KV.
         fdb_doc *doc;
         sprintf(key, keystr, IDX*10 + 5);
         sprintf(value, valuestr, IDX+1);
         fdb_doc_create(&doc, NULL, 0, NULL, 0, NULL, 0);
-        s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_GREATER);
+        s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_GREATER_OR_EQUAL);
         TEST_CHK(s == FDB_RESULT_SUCCESS);
 
         sprintf(key, keystr, (IDX+1)*10);
@@ -5102,12 +5102,12 @@ void get_nearest_test()
     }
 
     for (int IDX = 1; IDX < NUM; ++IDX)
-    {   // Smaller: should return prev KV.
+    {   // Smaller or equal: should return prev KV.
         fdb_doc *doc;
         sprintf(key, keystr, IDX*10 - 5);
         sprintf(value, valuestr, IDX-1);
         fdb_doc_create(&doc, NULL, 0, NULL, 0, NULL, 0);
-        s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_SMALLER);
+        s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_SMALLER_OR_EQUAL);
         TEST_CHK(s == FDB_RESULT_SUCCESS);
 
         sprintf(key, keystr, (IDX-1)*10);
@@ -5122,7 +5122,7 @@ void get_nearest_test()
         int IDX = NUM;
         sprintf(key, keystr, IDX*10 + 5);
         fdb_doc_create(&doc, NULL, 0, NULL, 0, NULL, 0);
-        s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_GREATER);
+        s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_GREATER_OR_EQUAL);
         TEST_CHK(s != FDB_RESULT_SUCCESS);
         fdb_doc_free(doc);
     }
@@ -5131,18 +5131,18 @@ void get_nearest_test()
         fdb_doc *doc;
         sprintf(key, "kee");
         fdb_doc_create(&doc, NULL, 0, NULL, 0, NULL, 0);
-        s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_SMALLER);
+        s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_SMALLER_OR_EQUAL);
         TEST_CHK(s != FDB_RESULT_SUCCESS);
         fdb_doc_free(doc);
     }
 
     for (int IDX = 0; IDX < NUM; ++IDX)
-    {   // Exact match with greater flag.
+    {   // Exact match with greater or equal flag.
         fdb_doc *doc;
         sprintf(key, keystr, IDX*10);
         sprintf(value, valuestr, IDX);
         fdb_doc_create(&doc, NULL, 0, NULL, 0, NULL, 0);
-        s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_GREATER);
+        s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_GREATER_OR_EQUAL);
         TEST_CHK(s == FDB_RESULT_SUCCESS);
         TEST_CMP(key, doc->key, strlen(key));
         TEST_CMP(value, doc->body, value_len);
@@ -5150,13 +5150,45 @@ void get_nearest_test()
     }
 
     for (int IDX = 0; IDX < NUM; ++IDX)
-    {   // Exact match without greater flag.
+    {   // Exact match with smaller or equal flag.
         fdb_doc *doc;
         sprintf(key, keystr, IDX*10);
         sprintf(value, valuestr, IDX);
         fdb_doc_create(&doc, NULL, 0, NULL, 0, NULL, 0);
+        s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_SMALLER_OR_EQUAL);
+        TEST_CHK(s == FDB_RESULT_SUCCESS);
+        TEST_CMP(key, doc->key, strlen(key));
+        TEST_CMP(value, doc->body, value_len);
+        fdb_doc_free(doc);
+    }
+
+    for (int IDX = 0; IDX < NUM - 1; ++IDX)
+    {   // Exact match with greater flag.
+        fdb_doc *doc;
+        sprintf(key, keystr, IDX*10);
+        fdb_doc_create(&doc, NULL, 0, NULL, 0, NULL, 0);
+        s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_GREATER);
+        TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+        // Even though the exact match exists, should be greater key.
+        sprintf(key, keystr, (IDX+1)*10);
+        sprintf(value, valuestr, IDX+1);
+        TEST_CMP(key, doc->key, strlen(key));
+        TEST_CMP(value, doc->body, value_len);
+        fdb_doc_free(doc);
+    }
+
+    for (int IDX = 1; IDX < NUM; ++IDX)
+    {   // Exact match with smaller flag.
+        fdb_doc *doc;
+        sprintf(key, keystr, IDX*10);
+        fdb_doc_create(&doc, NULL, 0, NULL, 0, NULL, 0);
         s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_SMALLER);
         TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+        // Even though the exact match exists, should be smaller key.
+        sprintf(key, keystr, (IDX-1)*10);
+        sprintf(value, valuestr, IDX-1);
         TEST_CMP(key, doc->key, strlen(key));
         TEST_CMP(value, doc->body, value_len);
         fdb_doc_free(doc);
