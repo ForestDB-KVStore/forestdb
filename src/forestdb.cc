@@ -3298,8 +3298,7 @@ fdb_status fdb_get_nearest(fdb_kvs_handle *handle,
             return _offset < 0 ? (fdb_status)_offset : FDB_RESULT_KEY_NOT_FOUND;
         }
 
-        if (_doc.length.keylen != doc_keylen ||
-            _doc.length.flag & DOCIO_DELETED) {
+        if (_doc.length.flag & DOCIO_DELETED) {
             free_docio_object(&_doc, 1, 1, 1);
             atomic_cas_uint8_t(&handle->handle_busy, 1, 0);
             return FDB_RESULT_KEY_NOT_FOUND;
