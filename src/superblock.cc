@@ -1229,7 +1229,9 @@ fdb_status sb_write(struct filemgr *file, size_t sb_no,
     int r;
     int real_blocksize = file->blocksize;
     int blocksize = file->blocksize - BLK_MARKER_SIZE;
-    uint8_t *buf = alca(uint8_t, real_blocksize);
+    void* buf_aligned = nullptr;
+    malloc_align(buf_aligned, FDB_SECTOR_SIZE, file->blocksize);
+    uint8_t *buf = (uint8_t*)buf_aligned;
     uint32_t crc, _crc;
     uint64_t enc_u64;
     uint64_t num_docs;
@@ -1356,12 +1358,13 @@ fdb_status sb_write(struct filemgr *file, size_t sb_no,
         fdb_log(log_callback, FDB_LOG_ERROR, fs,
                 "Failed to write the superblock (number: %" _F64 "), %s",
                 sb_no, errno_msg);
+        free_align(buf_aligned);
         return fs;
     }
 
     // increase superblock's revision number
     atomic_incr_uint64_t(&file->sb->revnum);
-
+    free_align(buf_aligned);
     return FDB_RESULT_SUCCESS;
 }
 
