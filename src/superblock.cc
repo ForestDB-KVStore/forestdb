@@ -31,6 +31,8 @@
 
 #include "memleak.h"
 
+#include <functional>
+
 /*
  * << super block structure >>
  *
@@ -1223,15 +1225,35 @@ bool sb_bmp_is_writable(struct filemgr *file, bid_t bid)
     return ret;
 }
 
+class GcFunc {
+public:
+    using Func = std::function< void() >;
+
+    GcFunc(Func _func) : done(false), func(_func) {}
+    ~GcFunc() { gcNow(); }
+    void gcNow() {
+        if (!done) {
+            func();
+            done = true;
+        }
+    }
+private:
+    bool done;
+    Func func;
+};
+
 fdb_status sb_write(struct filemgr *file, size_t sb_no,
                     err_log_callback * log_callback)
 {
     int r;
     int real_blocksize = file->blocksize;
     int blocksize = file->blocksize - BLK_MARKER_SIZE;
+
     void* buf_aligned = nullptr;
     malloc_align(buf_aligned, FDB_SECTOR_SIZE, file->blocksize);
     uint8_t *buf = (uint8_t*)buf_aligned;
+    GcFunc gc([&](){ free_align(buf_aligned); });
+
     uint32_t crc, _crc;
     uint64_t enc_u64;
     uint64_t num_docs;
@@ -1358,13 +1380,11 @@ fdb_status sb_write(struct filemgr *file, size_t sb_no,
         fdb_log(log_callback, FDB_LOG_ERROR, fs,
                 "Failed to write the superblock (number: %" _F64 "), %s",
                 sb_no, errno_msg);
-        free_align(buf_aligned);
         return fs;
     }
 
     // increase superblock's revision number
     atomic_incr_uint64_t(&file->sb->revnum);
-    free_align(buf_aligned);
     return FDB_RESULT_SUCCESS;
 }
 
@@ -1384,7 +1404,12 @@ static fdb_status _sb_read_given_no(struct filemgr *file,
     int real_blocksize = file->blocksize;
     int blocksize = file->blocksize - BLK_MARKER_SIZE;
     size_t i, num_docs;
-    uint8_t *buf = alca(uint8_t, real_blocksize);
+
+    void* buf_aligned = nullptr;
+    malloc_align(buf_aligned, FDB_SECTOR_SIZE, file->blocksize);
+    uint8_t *buf = (uint8_t*)buf_aligned;
+    GcFunc gc([&](){ free_align(buf_aligned); });
+
     uint32_t crc_file, crc, _crc;
     uint64_t enc_u64, version, offset, dummy64;
     fdb_status fs;

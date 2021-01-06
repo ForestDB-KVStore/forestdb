@@ -1075,8 +1075,9 @@ filemgr_open_result filemgr_open(char *filename, struct filemgr_ops *ops,
     result.file = file;
     result.rv = FDB_RESULT_SUCCESS;
     fdb_log(log_callback, FDB_LOG_INFO, FDB_RESULT_SUCCESS,
-            "Forestdb opened database file %s",
-            filename);
+            "Forestdb opened database file %s, ref count %zu",
+            filename,
+            atomic_get_uint32_t(&file->ref_count));
 
     return result;
 }
@@ -1455,8 +1456,9 @@ fdb_status filemgr_close(struct filemgr *file, bool cleanup_cache_onclose,
     }
 
     fdb_log(log_callback, FDB_LOG_INFO, (fdb_status)rv,
-            "Forestdb closed database file %s",
-            file->filename);
+            "Forestdb closed database file %s, ref count %zu",
+            file->filename,
+            atomic_get_uint32_t(&file->ref_count));
 
     spin_lock(&filemgr_openlock); // Grab the filemgr lock to avoid the race with
                                   // filemgr_open() because file->lock won't
