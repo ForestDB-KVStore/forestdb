@@ -31,8 +31,6 @@
 
 #include "memleak.h"
 
-#include <functional>
-
 /*
  * << super block structure >>
  *
@@ -1225,23 +1223,6 @@ bool sb_bmp_is_writable(struct filemgr *file, bid_t bid)
     return ret;
 }
 
-class GcFunc {
-public:
-    using Func = std::function< void() >;
-
-    GcFunc(Func _func) : done(false), func(_func) {}
-    ~GcFunc() { gcNow(); }
-    void gcNow() {
-        if (!done) {
-            func();
-            done = true;
-        }
-    }
-private:
-    bool done;
-    Func func;
-};
-
 fdb_status sb_write(struct filemgr *file, size_t sb_no,
                     err_log_callback * log_callback)
 {
@@ -1252,7 +1233,7 @@ fdb_status sb_write(struct filemgr *file, size_t sb_no,
     void* buf_aligned = nullptr;
     malloc_align(buf_aligned, FDB_SECTOR_SIZE, file->blocksize);
     uint8_t *buf = (uint8_t*)buf_aligned;
-    GcFunc gc([&](){ free_align(buf_aligned); });
+    FdbGcFunc gc([&](){ free_align(buf_aligned); });
 
     uint32_t crc, _crc;
     uint64_t enc_u64;
@@ -1408,7 +1389,7 @@ static fdb_status _sb_read_given_no(struct filemgr *file,
     void* buf_aligned = nullptr;
     malloc_align(buf_aligned, FDB_SECTOR_SIZE, file->blocksize);
     uint8_t *buf = (uint8_t*)buf_aligned;
-    GcFunc gc([&](){ free_align(buf_aligned); });
+    FdbGcFunc gc([&](){ free_align(buf_aligned); });
 
     uint32_t crc_file, crc, _crc;
     uint64_t enc_u64, version, offset, dummy64;

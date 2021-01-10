@@ -120,6 +120,9 @@ fdb_config get_default_config(void) {
     // Document blocks are cached by default.
     fconfig.do_not_cache_doc_blocks = false;
 
+    // Read 16 blocks ahead.
+    fconfig.num_blocks_readahead = 16;
+
     return fconfig;
 }
 

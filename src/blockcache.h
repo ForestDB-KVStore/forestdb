@@ -38,7 +38,7 @@ void bcache_init(int nblock, int blocksize, const bcache_config& bconfig);
 int bcache_read(struct filemgr *file, bid_t bid, void *buf);
 bool bcache_invalidate_block(struct filemgr *file, bid_t bid);
 int bcache_write(struct filemgr *file, bid_t bid, void *buf,
-                 bcache_dirty_t dirty, bool final_write);
+                 bcache_dirty_t dirty, bool final_write, bool ignore_if_exist);
 int bcache_write_partial(struct filemgr *file, bid_t bid, void *buf,
                          size_t offset, size_t len, bool final_write);
 void bcache_remove_dirty_blocks(struct filemgr *file);

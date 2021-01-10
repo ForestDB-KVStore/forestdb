@@ -18,7 +18,6 @@
 #ifndef _FDB_INTERNAL_H
 #define _FDB_INTERNAL_H
 
-#include <stdint.h>
 #include "common.h"
 #include "internal_types.h"
 #include "avltree.h"
@@ -27,6 +26,10 @@
 #include "docio.h"
 #include "staleblock.h"
 #include "log_message.h"
+
+#include <functional>
+
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -356,6 +359,24 @@ INLINE int _lex_keycmp(void *key1, size_t keylen1, void *key2, size_t keylen2)
         }
     }
 }
+
+class FdbGcFunc {
+public:
+    using Func = std::function< void() >;
+
+    FdbGcFunc(Func _func) : done(false), func(_func) {}
+    ~FdbGcFunc() { gcNow(); }
+    void gcNow() {
+        if (!done) {
+            func();
+            done = true;
+        }
+    }
+private:
+    bool done;
+    Func func;
+};
+
 
 #ifdef __cplusplus
 }

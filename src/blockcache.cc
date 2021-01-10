@@ -1069,7 +1069,8 @@ int bcache_write(struct filemgr *file,
                  bid_t bid,
                  void *buf,
                  bcache_dirty_t dirty,
-                 bool final_write)
+                 bool final_write,
+                 bool ignore_if_exist)
 {
     struct hash_elem *h = NULL;
     struct bcache_item *item;
@@ -1128,6 +1129,11 @@ int bcache_write(struct filemgr *file,
             item = _get_entry(h, struct bcache_item, hash_elem);
         }
     } else {
+        // cache hit.
+        if (ignore_if_exist) {
+            spin_unlock(&fname_new->shards[shard_num].lock);
+            return 0;
+        }
         item = _get_entry(h, struct bcache_item, hash_elem);
     }
 

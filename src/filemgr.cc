@@ -38,6 +38,8 @@
 
 #include "memleak.h"
 
+#include <list>
+
 #ifdef __DEBUG
 #ifndef __DEBUG_FILEMGR
     #undef DBG
@@ -310,6 +312,16 @@ static ssize_t filemgr_read_block(struct filemgr *file, void *buf, bid_t bid) {
             return status;
     }
     return result;
+}
+
+// Read multiple blocks (without decryption).
+ssize_t filemgr_read_blocks(struct filemgr *file, void *buf,
+                            unsigned num_blocks, bid_t start_bid)
+{
+    size_t blocksize = file->blocksize;
+    cs_off_t offset = start_bid * blocksize;
+    size_t nbytes = num_blocks * blocksize;
+    return file->ops->pread(file->fd, buf, nbytes, offset);
 }
 
 // Write consecutive block(s) to the file, encrypting if necessary.
@@ -1952,10 +1964,69 @@ uint64_t filemgr_flush_immutable(struct filemgr *file,
     return ret;
 }
 
+void* alloc_buf_for_readahead() {
+    void* ret = nullptr;
+    if ( !(global_config.flag & _ARCH_O_DIRECT) ) return ret;
+
+    malloc_align(ret, FDB_SECTOR_SIZE, global_config.blocksize);
+    return ret;
+}
+
+fdb_status filemgr_do_readahead(struct filemgr *file, bid_t bid, void *buf,
+                        void* buf_aligned,
+                        err_log_callback *log_callback)
+{
+    uint64_t total_blocks = atomic_get_uint64_t(&file->pos) / file->blocksize;
+    size_t num_blocks_to_read = global_config.num_blocks_readahead;
+    if (bid + num_blocks_to_read > total_blocks) {
+        num_blocks_to_read = total_blocks - bid;
+    }
+
+    // Should lock all individual blocks except for the first block
+    // (the first block is already locked by the caller).
+    std::list<plock_entry_t*> plock_entries;
+    for (size_t ii = 1; ii < num_blocks_to_read; ++ii) {
+        bid_t locking_bid = bid + ii;
+        bid_t is_writer = 0; // read operation.
+        plock_entry_t* ee = plock_lock(&file->plock, &locking_bid, &is_writer);
+        plock_entries.push_back(ee);
+    }
+    FdbGcFunc auto_unlock{ [file, plock_entries](){
+        for (plock_entry_t* ee: plock_entries) {
+            plock_unlock(&file->plock, ee);
+        }
+    } };
+
+    ssize_t r = filemgr_read_blocks(file, buf_aligned, num_blocks_to_read, bid);
+    if (r != (ssize_t)num_blocks_to_read * global_config.blocksize) {
+        const char *msg = "Read-ahead error: failed to read BID %" _F64 " in a "
+            "database file '%s', num blocks %" _F64 "\n";
+        fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_READ_FAIL,
+                msg, bid, file->filename, num_blocks_to_read);
+        return FDB_RESULT_READ_FAIL;
+    }
+
+    uint8_t* ptr = (uint8_t*)buf_aligned;
+
+    // Copy the contents of the first block to user's buffer.
+    memcpy(buf, ptr, global_config.blocksize);
+
+    for (size_t ii = 0; ii < num_blocks_to_read; ++ii) {
+        bid_t writing_bid = bid + ii;
+        bcache_write(file, writing_bid, ptr + (ii * global_config.blocksize),
+                     BCACHE_REQ_CLEAN, false, true);
+    }
+
+    return FDB_RESULT_SUCCESS;
+}
+
 fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
                         err_log_callback *log_callback,
                         bool read_on_cache_miss)
 {
+    thread_local void* buf_aligned = alloc_buf_for_readahead();
+    thread_local FdbGcFunc gc([&](){ free_align(buf_aligned); });
+
     size_t lock_no;
     ssize_t r;
     uint64_t pos = bid * file->blocksize;
@@ -1999,74 +2070,84 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
                     plock_unlock(&file->plock, plock_entry);
                 }
                 const char *msg = "Read error: BID %" _F64 " in a database file '%s' "
-                    "doesn't exist in the cache and read_on_cache_miss flag is turned on.\n";
+                    "doesn't exist in the cache and read_on_cache_miss "
+                    "flag is turned on.\n";
                 fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_READ_FAIL,
                         msg, bid, file->filename);
                 return FDB_RESULT_READ_FAIL;
             }
 
-            // if normal file, just read a block
-            r = filemgr_read_block(file, buf, bid);
-            if (r != (ssize_t)file->blocksize) {
-                _log_errno_str(file->ops, log_callback,
-                               (fdb_status) r, "READ", file->filename);
-                if (locked) {
-                    plock_unlock(&file->plock, plock_entry);
-                }
-                const char *msg = "Read error: BID %" _F64 " in a database file '%s' "
-                    "is not read correctly: only %d bytes read.\n";
-                status = r < 0 ? (fdb_status)r : FDB_RESULT_READ_FAIL;
-                fdb_log(log_callback, FDB_LOG_ERROR, status,
-                        msg, bid, file->filename, r);
-                if (!log_callback || !log_callback->callback) {
-                    dbg_print_buf(buf, file->blocksize, true, 16);
-                }
-                return status;
-            }
+            if ( global_config.flag & _ARCH_O_DIRECT &&
+                 global_config.num_blocks_readahead ) {
+                // Direct-IO mode, do read-ahead.
+                status = filemgr_do_readahead(file, bid, buf, buf_aligned, log_callback);
+                if (status != FDB_RESULT_SUCCESS) return status;
 
-            status = _filemgr_crc32_check(file, buf);
-            if (status != FDB_RESULT_SUCCESS) {
-                _log_errno_str(file->ops, log_callback, status, "READ",
-                        file->filename);
-                if (locked) {
-                    plock_unlock(&file->plock, plock_entry);
-                }
-                const char *msg = "Read error: checksum error on BID %" _F64 " in a database file '%s' "
-                    ": marker %x\n";
-                fdb_log(log_callback, FDB_LOG_ERROR, status,
-                        msg, bid,
-                        file->filename, *((uint8_t*)buf + file->blocksize-1));
-                if (!log_callback || !log_callback->callback) {
-                    dbg_print_buf(buf, file->blocksize, true, 16);
-                }
-                return status;
-            }
-
-            uint8_t marker = *((uint8_t*)buf + file->blocksize - 1);
-            if ( global_config.do_not_cache_doc_blocks &&
-                 marker != BLK_MARKER_BNODE ) {
-                // If caching option is ON, and not a B-tree block,
-                // we do not put it into cache.
-                r = global_config.blocksize;
             } else {
-                r = bcache_write(file, bid, buf, BCACHE_REQ_CLEAN, false);
-            }
+                // if normal file, just read a block
+                r = filemgr_read_block(file, buf, bid);
+                if (r != (ssize_t)file->blocksize) {
+                    _log_errno_str(file->ops, log_callback,
+                                   (fdb_status) r, "READ", file->filename);
+                    if (locked) {
+                        plock_unlock(&file->plock, plock_entry);
+                    }
+                    const char *msg = "Read error: BID %" _F64
+                        " in a database file '%s' is not read correctly: "
+                        "only %d bytes read.\n";
+                    status = r < 0 ? (fdb_status)r : FDB_RESULT_READ_FAIL;
+                    fdb_log(log_callback, FDB_LOG_ERROR, status,
+                            msg, bid, file->filename, r);
+                    if (!log_callback || !log_callback->callback) {
+                        dbg_print_buf(buf, file->blocksize, true, 16);
+                    }
+                    return status;
+                }
 
-            if (r != global_config.blocksize) {
-                if (locked) {
-                    plock_unlock(&file->plock, plock_entry);
+                status = _filemgr_crc32_check(file, buf);
+                if (status != FDB_RESULT_SUCCESS) {
+                    _log_errno_str(file->ops, log_callback, status, "READ",
+                            file->filename);
+                    if (locked) {
+                        plock_unlock(&file->plock, plock_entry);
+                    }
+                    const char *msg = "Read error: checksum error on BID %" _F64
+                        " in a database file '%s' : marker %x\n";
+                    fdb_log(log_callback, FDB_LOG_ERROR, status,
+                            msg, bid,
+                            file->filename, *((uint8_t*)buf + file->blocksize-1));
+                    if (!log_callback || !log_callback->callback) {
+                        dbg_print_buf(buf, file->blocksize, true, 16);
+                    }
+                    return status;
                 }
-                _log_errno_str(file->ops, log_callback,
-                               (fdb_status) r, "WRITE", file->filename);
-                const char *msg = "Read error: BID %" _F64 " in a database file '%s' "
-                    "is not written in cache correctly: only %d bytes written.\n";
-                status = r < 0 ? (fdb_status) r : FDB_RESULT_WRITE_FAIL;
-                fdb_log(log_callback, FDB_LOG_ERROR, status,
-                        msg, bid, file->filename, r);
-                if (!log_callback || !log_callback->callback) {
-                    dbg_print_buf(buf, file->blocksize, true, 16);
+
+                uint8_t marker = *((uint8_t*)buf + file->blocksize - 1);
+                if ( global_config.do_not_cache_doc_blocks &&
+                     marker != BLK_MARKER_BNODE ) {
+                    // If caching option is ON, and not a B-tree block,
+                    // we do not put it into cache.
+                    r = global_config.blocksize;
+                } else {
+                    r = bcache_write(file, bid, buf, BCACHE_REQ_CLEAN, false, false);
                 }
-                return status;
+
+                if (r != global_config.blocksize) {
+                    if (locked) {
+                        plock_unlock(&file->plock, plock_entry);
+                    }
+                    _log_errno_str(file->ops, log_callback,
+                                   (fdb_status) r, "WRITE", file->filename);
+                    const char *msg = "Read error: BID %" _F64 " in a database file '%s' "
+                        "is not written in cache correctly: only %d bytes written.\n";
+                    status = r < 0 ? (fdb_status) r : FDB_RESULT_WRITE_FAIL;
+                    fdb_log(log_callback, FDB_LOG_ERROR, status,
+                            msg, bid, file->filename, r);
+                    if (!log_callback || !log_callback->callback) {
+                        dbg_print_buf(buf, file->blocksize, true, 16);
+                    }
+                    return status;
+                }
             }
         }
         if (locked) {
@@ -2171,7 +2252,7 @@ fdb_status filemgr_write_offset(struct filemgr *file, bid_t bid,
 
         if (len == file->blocksize) {
             // write entire block .. we don't need to read previous block
-            r = bcache_write(file, bid, buf, BCACHE_REQ_DIRTY, final_write);
+            r = bcache_write(file, bid, buf, BCACHE_REQ_DIRTY, final_write, false);
             if (r != global_config.blocksize) {
                 if (locked) {
                     plock_unlock(&file->plock, plock_entry);
@@ -2211,7 +2292,7 @@ fdb_status filemgr_write_offset(struct filemgr *file, bid_t bid,
                     }
                 }
                 memcpy((uint8_t *)_buf + offset, buf, len);
-                r = bcache_write(file, bid, _buf, BCACHE_REQ_DIRTY, final_write);
+                r = bcache_write(file, bid, _buf, BCACHE_REQ_DIRTY, final_write, false);
                 if (r != global_config.blocksize) {
                     if (locked) {
                         plock_unlock(&file->plock, plock_entry);

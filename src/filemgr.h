@@ -98,6 +98,7 @@ struct filemgr_config {
     // be kept for snapshot readers.
     atomic_uint64_t num_keeping_headers;
     bool do_not_cache_doc_blocks;
+    uint32_t num_blocks_readahead;
 };
 
 #ifndef _LATENCY_STATS

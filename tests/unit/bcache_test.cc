@@ -148,7 +148,7 @@ void * worker(void *voidargs)
             ret = args->file->ops->pread(args->file->fd, buf,
                                          args->file->blocksize, bid * args->file->blocksize);
             TEST_CHK(ret == (ssize_t)args->file->blocksize);
-            ret = bcache_write(args->file, bid, buf, BCACHE_REQ_CLEAN, false);
+            ret = bcache_write(args->file, bid, buf, BCACHE_REQ_CLEAN, false, false);
             TEST_CHK(ret == (ssize_t)args->file->blocksize);
         }
         crc_file = crc32_8(buf, sizeof(uint64_t)*2, 0);
@@ -167,7 +167,7 @@ void * worker(void *voidargs)
             crc = crc32_8(buf, sizeof(uint64_t)*2, 0);
             memcpy(buf + sizeof(uint64_t)*2, &crc, sizeof(crc));
 
-            ret = bcache_write(args->file, bid, buf, BCACHE_REQ_DIRTY, true);
+            ret = bcache_write(args->file, bid, buf, BCACHE_REQ_DIRTY, true, false);
             TEST_CHK(ret == (ssize_t)args->file->blocksize);
         } else { // have some of the reader threads flush dirty immutable blocks
             if (bid <= args->nblocks / 4) { // 25% probability
@@ -227,7 +227,7 @@ void multi_thread_test(
         memcpy(buf + sizeof(i), &j, sizeof(j));
         crc = crc32_8(buf, sizeof(i) + sizeof(j), 0);
         memcpy(buf + sizeof(i) + sizeof(j), &crc, sizeof(crc));
-        bcache_write(file, (bid_t)i, buf, BCACHE_REQ_DIRTY, false);
+        bcache_write(file, (bid_t)i, buf, BCACHE_REQ_DIRTY, false, false);
     }
 
     for (i=0;i<(uint64_t)n;++i){

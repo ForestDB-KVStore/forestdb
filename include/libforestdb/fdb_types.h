@@ -549,6 +549,12 @@ typedef struct {
      * If true, blocks containing actual document will not be cached.
      */
     bool do_not_cache_doc_blocks;
+    /**
+     * If non-zero and O_DIRECT mode is enabled, given number of
+     * blocks (including the requested block) will be read ahead
+     * and then cached.
+     */
+    uint32_t num_blocks_readahead;
 } fdb_config;
 
 typedef struct {

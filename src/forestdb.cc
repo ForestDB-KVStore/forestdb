@@ -723,6 +723,7 @@ fdb_status fdb_init(fdb_config *config)
         f_config.ncacheblock = _config.buffercache_size / _config.blocksize;
         f_config.seqtree_opt = _config.seqtree_opt;
         f_config.do_not_cache_doc_blocks = _config.do_not_cache_doc_blocks;
+        f_config.num_blocks_readahead = _config.num_blocks_readahead;
         filemgr_init(&f_config);
 
         // WARNING: If background compactor is disabled,
@@ -1499,6 +1500,7 @@ static void _fdb_init_file_config(const fdb_config *config,
                           config->num_keeping_headers,
                           std::memory_order_relaxed);
     fconfig->do_not_cache_doc_blocks = config->do_not_cache_doc_blocks;
+    fconfig->num_blocks_readahead = config->num_blocks_readahead;
 }
 
 fdb_status _fdb_clone_snapshot(fdb_kvs_handle *handle_in,
