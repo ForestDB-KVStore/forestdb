@@ -78,6 +78,7 @@ struct filemgr_config {
                                                   std::memory_order_relaxed),
                               std::memory_order_relaxed);
         do_not_cache_doc_blocks = config.do_not_cache_doc_blocks;
+        num_blocks_readahead = config.num_blocks_readahead;
         return *this;
     }
 

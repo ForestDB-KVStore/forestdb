@@ -1966,9 +1966,11 @@ uint64_t filemgr_flush_immutable(struct filemgr *file,
 
 void* alloc_buf_for_readahead() {
     void* ret = nullptr;
-    if ( !(global_config.flag & _ARCH_O_DIRECT) ) return ret;
+    if (!global_config.num_blocks_readahead) return ret;
 
-    malloc_align(ret, FDB_SECTOR_SIZE, global_config.blocksize);
+    malloc_align( ret,
+                  FDB_SECTOR_SIZE,
+                  global_config.blocksize * global_config.num_blocks_readahead );
     return ret;
 }
 
@@ -2077,8 +2079,7 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
                 return FDB_RESULT_READ_FAIL;
             }
 
-            if ( global_config.flag & _ARCH_O_DIRECT &&
-                 global_config.num_blocks_readahead ) {
+            if (buf_aligned && global_config.num_blocks_readahead) {
                 // Direct-IO mode, do read-ahead.
                 status = filemgr_do_readahead(file, bid, buf, buf_aligned, log_callback);
                 if (status != FDB_RESULT_SUCCESS) return status;
