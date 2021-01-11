@@ -188,6 +188,7 @@ struct filemgr {
     uint32_t blocksize;
     int fd;
     atomic_uint64_t pos;
+    atomic_uint64_t latest_filesize;
     atomic_uint64_t last_commit;
     atomic_uint64_t last_writable_bmp_revnum;
     atomic_uint64_t num_invalidated_blocks;

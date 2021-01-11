@@ -925,6 +925,7 @@ filemgr_open_result filemgr_open(char *filename, struct filemgr_ops *ops,
     atomic_init_uint64_t(&file->last_commit, offset);
     atomic_init_uint64_t(&file->last_writable_bmp_revnum, 0);
     atomic_init_uint64_t(&file->pos, offset);
+    atomic_init_uint64_t(&file->latest_filesize, offset);
     atomic_init_uint32_t(&file->throttling_delay, 0);
     atomic_init_uint64_t(&file->num_invalidated_blocks, 0);
     atomic_init_uint8_t(&file->io_in_prog, 0);
@@ -1978,10 +1979,10 @@ fdb_status filemgr_do_readahead(struct filemgr *file, bid_t bid, void *buf,
                         void* buf_aligned,
                         err_log_callback *log_callback)
 {
-    uint64_t total_blocks = atomic_get_uint64_t(&file->pos) / file->blocksize;
+    uint64_t total_blocks = atomic_get_uint64_t(&file->latest_filesize) / file->blocksize;
     size_t num_blocks_to_read = global_config.num_blocks_readahead;
     if (bid + num_blocks_to_read > total_blocks) {
-        num_blocks_to_read = total_blocks - bid;
+        num_blocks_to_read = (total_blocks >= bid) ? total_blocks - bid : 0;
     }
 
     // Should lock all individual blocks except for the first block
@@ -2002,9 +2003,11 @@ fdb_status filemgr_do_readahead(struct filemgr *file, bid_t bid, void *buf,
     ssize_t r = filemgr_read_blocks(file, buf_aligned, num_blocks_to_read, bid);
     if (r != (ssize_t)num_blocks_to_read * global_config.blocksize) {
         const char *msg = "Read-ahead error: failed to read BID %" _F64 " in a "
-            "database file '%s', num blocks %" _F64 "\n";
+            "database file '%s', num blocks %" _F64 ", pos %zu, filesize %zu\n";
         fdb_log(log_callback, FDB_LOG_ERROR, FDB_RESULT_READ_FAIL,
-                msg, bid, file->filename, num_blocks_to_read);
+                msg, bid, file->filename, num_blocks_to_read,
+                atomic_get_uint64_t(&file->pos),
+                atomic_get_uint64_t(&file->latest_filesize));
         return FDB_RESULT_READ_FAIL;
     }
 
@@ -2079,7 +2082,23 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
                 return FDB_RESULT_READ_FAIL;
             }
 
-            if (buf_aligned && global_config.num_blocks_readahead) {
+            uint64_t total_blocks = atomic_get_uint64_t(&file->latest_filesize) /
+                                    file->blocksize;
+            size_t wait_count = 0;
+            while (bid >= total_blocks) {
+                // This means blocks are asynchronously flushed from cache.
+                // Should update file size.
+                cs_off_t exp_filesize = file->ops->goto_eof(file->fd);
+                atomic_init_uint64_t(&file->latest_filesize, exp_filesize);
+                total_blocks = atomic_get_uint64_t(&file->latest_filesize) /
+                               file->blocksize;
+                if (wait_count++) {
+                    usleep(1000);
+                }
+            }
+
+            if ( buf_aligned &&
+                 global_config.num_blocks_readahead ) {
                 // Direct-IO mode, do read-ahead.
                 status = filemgr_do_readahead(file, bid, buf, buf_aligned, log_callback);
                 if (status != FDB_RESULT_SUCCESS) return status;
@@ -2095,10 +2114,11 @@ fdb_status filemgr_read(struct filemgr *file, bid_t bid, void *buf,
                     }
                     const char *msg = "Read error: BID %" _F64
                         " in a database file '%s' is not read correctly: "
-                        "only %d bytes read.\n";
+                        "only %d bytes read, file size %zu.\n";
                     status = r < 0 ? (fdb_status)r : FDB_RESULT_READ_FAIL;
                     fdb_log(log_callback, FDB_LOG_ERROR, status,
-                            msg, bid, file->filename, r);
+                            msg, bid, file->filename, r,
+                            atomic_get_uint64_t(&file->latest_filesize));
                     if (!log_callback || !log_callback->callback) {
                         dbg_print_buf(buf, file->blocksize, true, 16);
                     }
@@ -2368,6 +2388,7 @@ fdb_status filemgr_commit_bid(struct filemgr *file, bid_t bid,
     bool block_reusing = false;
 
     filemgr_set_io_inprog(file);
+    uint64_t exp_filesize = atomic_get_uint64_t(&file->pos);
     if (global_config.ncacheblock > 0) {
         result = bcache_flush(file);
         if (result != FDB_RESULT_SUCCESS) {
@@ -2523,6 +2544,8 @@ fdb_status filemgr_commit_bid(struct filemgr *file, bid_t bid,
         _log_errno_str(file->ops, log_callback, (fdb_status)result,
                        "FSYNC", file->filename);
     }
+    atomic_init_uint64_t(&file->latest_filesize, exp_filesize);
+
     filemgr_clear_io_inprog(file);
     return (fdb_status) result;
 }
@@ -2531,6 +2554,7 @@ fdb_status filemgr_sync(struct filemgr *file, bool sync_option,
                         err_log_callback *log_callback)
 {
     fdb_status result = FDB_RESULT_SUCCESS;
+    uint64_t exp_filesize = atomic_get_uint64_t(&file->pos);
     if (global_config.ncacheblock > 0) {
         result = bcache_flush(file);
         if (result != FDB_RESULT_SUCCESS) {
@@ -2545,6 +2569,8 @@ fdb_status filemgr_sync(struct filemgr *file, bool sync_option,
         _log_errno_str(file->ops, log_callback, (fdb_status)rv, "FSYNC", file->filename);
         return (fdb_status) rv;
     }
+    atomic_init_uint64_t(&file->latest_filesize, exp_filesize);
+
     return result;
 }
 
