@@ -3339,6 +3339,107 @@ fdb_status fdb_get_nearest(fdb_kvs_handle *handle,
     return FDB_RESULT_KEY_NOT_FOUND;
 }
 
+LIBFDB_API
+fdb_status fdb_traverse_index(fdb_kvs_handle *handle,
+                              const void *key,
+                              size_t keylen,
+                              fdb_index_traversal_callback cb,
+                              void* ctx)
+{
+    uint64_t offset;
+    int64_t _offset;
+    struct docio_object _doc;
+    struct docio_handle *dhandle;
+    hbtrie_result hr = HBTRIE_RESULT_FAIL;
+    fdb_status fs = FDB_RESULT_SUCCESS;
+    fdb_txn *txn;
+    //fdb_doc doc_kv;
+    LATENCY_STAT_START();
+
+    if (!handle) {
+        return FDB_RESULT_INVALID_HANDLE;
+    }
+
+    if (!handle->config.do_not_search_wal) {
+        return FDB_RESULT_INVALID_CONFIG;
+    }
+
+    if (!cb) {
+        return FDB_RESULT_INVALID_ARGS;
+    }
+
+    if (!atomic_cas_uint8_t(&handle->handle_busy, 0, 1)) {
+        return FDB_RESULT_HANDLE_BUSY;
+    }
+
+    if (!handle->shandle) {
+        fdb_check_file_reopen(handle, NULL);
+        txn = handle->fhandle->root->txn;
+        if (!txn) {
+            txn = &handle->file->global_txn;
+        }
+    } else {
+        txn = handle->shandle->snap_txn;
+    }
+
+    dhandle = handle->dhandle;
+
+    if (!handle->shandle) {
+        fdb_sync_db_header(handle);
+    }
+
+    // Need to prepend 8-byte ID in multi-KVS mode.
+    void* doc_key = (void*)key;
+    size_t doc_keylen = keylen;
+
+    if (handle->kvs && key && keylen) {
+        // multi KV instance mode
+        int size_chunk = handle->config.chunksize;
+        doc_keylen = keylen + size_chunk;
+        doc_key = alca(uint8_t, doc_keylen);
+        kvid2buf(size_chunk, handle->kvs->id, doc_key);
+        memcpy((uint8_t*)doc_key + size_chunk, key, keylen);
+    }
+
+    struct hbtrie_iterator hit;
+
+    thread_local std::vector<char> ret_key_buf(FDB_MAX_KEYLEN_INTERNAL);
+    thread_local std::vector<char> ret_value_buf(64);
+    size_t ret_keylen = 0;
+
+    _fdb_sync_dirty_root(handle);
+    hr = hbtrie_iterator_init(handle->trie, &hit, doc_key, doc_keylen);
+    _fdb_release_dirty_root(handle);
+
+    while (hr == HBTRIE_RESULT_SUCCESS) {
+        hr = hbtrie_next_partial(&hit, &ret_key_buf[0], &ret_keylen, &ret_value_buf[0]);
+        fs = btreeblk_end(handle->bhandle);
+        if (fs != FDB_RESULT_SUCCESS || hr != HBTRIE_RESULT_SUCCESS) {
+            break;
+        }
+
+        void* ptr = nullptr;
+        size_t ptr_keylen = 0;
+        if (ret_keylen >= handle->config.chunksize) {
+            ptr = &ret_key_buf[handle->config.chunksize];
+            ptr_keylen = ret_keylen - handle->config.chunksize;
+        }
+
+        offset = *((uint64_t*)&ret_value_buf[0]);
+        offset = _endian_decode(offset);
+
+        fdb_index_traversal_decision dec =
+            cb(handle, ptr, ptr_keylen, offset, ctx);
+        if (dec == FDB_IT_STOP) {
+            break;
+        }
+    }
+    hbtrie_iterator_free(&hit);
+
+    atomic_cas_uint8_t(&handle->handle_busy, 1, 0);
+    return FDB_RESULT_SUCCESS;;
+}
+
 // search document metadata using key
 LIBFDB_API
 fdb_status fdb_get_metaonly(fdb_kvs_handle *handle, fdb_doc *doc)

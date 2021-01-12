@@ -266,6 +266,28 @@ fdb_status fdb_get_nearest(fdb_kvs_handle *handle,
                            fdb_get_nearest_opt_t opt);
 
 /**
+ * Travers the index and return key and its offset via the given
+ * callback function. Traversing index will be much faster than
+ * normal iteration, as it will not read meta data from doc blocks.
+ *
+ * The returned key can be a unique sub-string of the entire key,
+ * as this API returns the indexed part of the key only.
+ *
+ * @param handle Pointer to ForestDB KV store handle.
+ * @param key Pointer to the key to start index traversal.
+ * @param keylen Length of the key.
+ * @param cb Callback function.
+ * @param ctx Additional context that will be passed to the callback function.
+ * @return FDB_RESULT_SUCCESS on success.
+ */
+LIBFDB_API
+fdb_status fdb_traverse_index(fdb_kvs_handle *handle,
+                              const void *key,
+                              size_t keylen,
+                              fdb_index_traversal_callback cb,
+                              void* ctx);
+
+/**
  * Retrieve the metadata for a given key.
  * Note that FDB_DOC instance should be created by calling
  * fdb_doc_create(doc, key, keylen, NULL, 0, NULL, 0) before using this API.

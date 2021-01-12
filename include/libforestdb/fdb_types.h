@@ -271,6 +271,26 @@ typedef fdb_compact_decision (*fdb_compaction_callback)(
                                void *ctx);
 
 /**
+ * Index traversal decision for index traversal callback function.
+ * If user returns `FDB_IT_STOP`, the index traversal will be aborted.
+ */
+typedef int fdb_index_traversal_decision;
+enum {
+    FDB_IT_NEXT = 0x0,
+    FDB_IT_STOP = 0x1
+};
+
+/**
+ * Pointer type definition of a callback function for index traversal.
+ */
+typedef fdb_index_traversal_decision (*fdb_index_traversal_callback)(
+                                     fdb_kvs_handle *fhandle,
+                                     void* key,
+                                     size_t keylen,
+                                     uint64_t offset,
+                                     void *ctx);
+
+/**
  * Order of document migration from old file to new file during compaction.
  *
  * SORT_BY_OFFSET: Documents are moved in a mutation order. Fast compaction
