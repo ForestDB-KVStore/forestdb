@@ -3347,9 +3347,7 @@ fdb_status fdb_traverse_index(fdb_kvs_handle *handle,
                               void* ctx)
 {
     uint64_t offset;
-    int64_t _offset;
     struct docio_object _doc;
-    struct docio_handle *dhandle;
     hbtrie_result hr = HBTRIE_RESULT_FAIL;
     fdb_status fs = FDB_RESULT_SUCCESS;
     fdb_txn *txn;
@@ -3381,8 +3379,6 @@ fdb_status fdb_traverse_index(fdb_kvs_handle *handle,
     } else {
         txn = handle->shandle->snap_txn;
     }
-
-    dhandle = handle->dhandle;
 
     if (!handle->shandle) {
         fdb_sync_db_header(handle);
@@ -3420,7 +3416,9 @@ fdb_status fdb_traverse_index(fdb_kvs_handle *handle,
 
         void* ptr = nullptr;
         size_t ptr_keylen = 0;
-        if (ret_keylen >= handle->config.chunksize) {
+        if (handle->kvs && ret_keylen >= handle->config.chunksize) {
+            // In multi-KVS mode, skip the first 8-byte (KVS ID)
+            // as it is not the part of user-key.
             ptr = &ret_key_buf[handle->config.chunksize];
             ptr_keylen = ret_keylen - handle->config.chunksize;
         }

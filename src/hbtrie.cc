@@ -878,6 +878,17 @@ static hbtrie_result _hbtrie_next(struct hbtrie_iterator *it,
             bmeta.size = btree_read_meta(&btree, bmeta.data);
             _hbtrie_fetch_meta(trie, bmeta.size, &hbmeta, bmeta.data);
 
+            if ( (flag & HBTRIE_PARTIAL_MATCH) &&
+                 hbmeta.prefix_len &&
+                 hbmeta.prefix ) {
+                // In partial match mode, should copy the
+                // skipped prefix to `curkey` (if exists).
+                memcpy((uint8_t*)it->curkey + (item->chunkno + 1) * trie->chunksize,
+                       hbmeta.prefix,
+                       hbmeta.prefix_len);
+                it->keylen = hbmeta.chunkno * trie->chunksize;
+            }
+
             item_new = (struct btreeit_item *)
                        mempool_alloc(sizeof(struct btreeit_item));
             if (_is_leaf_btree(hbmeta.chunkno)) {
