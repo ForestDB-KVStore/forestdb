@@ -2689,6 +2689,10 @@ stale_header_info fdb_get_smallest_active_header(fdb_kvs_handle *handle)
                 break;
             }
         }
+        if (!n_headers) {
+            ret.bid = hdr_bid;
+            ret.revnum = hdr_revnum;
+        }
     }
 
     // although we keep more headers from the oldest active header, we have to
@@ -2697,8 +2701,19 @@ stale_header_info fdb_get_smallest_active_header(fdb_kvs_handle *handle)
     uint64_t dummy64;
     char *new_filename;
 
-    filemgr_fetch_header(handle->file, ret.bid, hdr_buf, &hdr_len, &seqnum,
-                         &hdr_revnum, NULL, &magic, NULL, &handle->log_callback);
+    if (ret.bid == handle->last_hdr_bid) {
+        // The latest header (that is not written yet) is the
+        // only one that we can reclaim. Read from memory.
+        filemgr_get_header(handle->file, hdr_buf, &hdr_len, NULL, &seqnum, &hdr_revnum);
+        if (!hdr_len) {
+            ret.bid = BLK_NOT_FOUND;
+            ret.revnum = 0;
+            return ret;
+        }
+    } else {
+        filemgr_fetch_header(handle->file, ret.bid, hdr_buf, &hdr_len, &seqnum,
+                             &hdr_revnum, NULL, &magic, NULL, &handle->log_callback);
+    }
     fdb_fetch_header(magic, hdr_buf, &dummy64, &dummy64, &dummy64, &dummy64,
                      &dummy64, &dummy64, &dummy64, &last_wal_bid, &dummy64,
                      &dummy64, &new_filename, NULL);
