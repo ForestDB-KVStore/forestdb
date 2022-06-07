@@ -17,6 +17,7 @@
 
 // TODO: Consolidate Various ForestDB Tasks into a Shared Thread Pool
 
+#include "arch.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -49,14 +50,14 @@
 
 // variables for initialization
 volatile uint8_t bgflusher_initialized = 0;
-static mutex_t bgf_lock;
+static mutex_t bgf_lock = MUTEX_INITIALIZER;
 
 static size_t num_bgflusher_threads = DEFAULT_NUM_BGFLUSHER_THREADS;
 static thread_t *bgflusher_tids = NULL;
 
 static size_t sleep_duration = FDB_BGFLUSHER_SLEEP_DURATION;
 
-static mutex_t sync_mutex;
+static mutex_t sync_mutex = MUTEX_INITIALIZER;
 static thread_cond_t sync_cond;
 
 static volatile uint8_t bgflusher_terminate_signal = 0;
@@ -230,6 +231,8 @@ fdb_status bgflusher_register_file(struct filemgr *file,
                                    fdb_config *config,
                                    err_log_callback *log_callback)
 {
+    if (!bgflusher_initialized) return FDB_RESULT_SUCCESS;
+
     file_status_t fstatus;
     fdb_status fs = FDB_RESULT_SUCCESS;
     struct avl_node *a = NULL;
@@ -275,6 +278,8 @@ fdb_status bgflusher_register_file(struct filemgr *file,
 void bgflusher_switch_file(struct filemgr *old_file, struct filemgr *new_file,
                            err_log_callback *log_callback)
 {
+    if (!bgflusher_initialized) return;
+
     struct avl_node *a = NULL;
     struct openfiles_elem query, *elem;
 
@@ -297,6 +302,8 @@ void bgflusher_switch_file(struct filemgr *old_file, struct filemgr *new_file,
 
 void bgflusher_deregister_file(struct filemgr *file)
 {
+    if (!bgflusher_initialized) return;
+
     struct avl_node *a = NULL;
     struct openfiles_elem query, *elem;
 
