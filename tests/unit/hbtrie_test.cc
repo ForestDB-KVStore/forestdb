@@ -885,6 +885,109 @@ void hbtrie_partial_update_test()
     TEST_RESULT("HB+trie partial update test");
 }
 
+void iterator_start_key_greater_than_prefix_test()
+{
+    TEST_INIT();
+
+    int blocksize = 256;
+    uint64_t offset, offset_old, _offset;
+    uint32_t docsize;
+    char dockey[256], meta[256], body[256];
+    hbtrie_result r;
+    size_t keylen;
+
+    int rr = system(SHELL_DEL " hbtrie_testfile");
+    (void)rr;
+
+    char keybuf[256], metabuf[256], bodybuf[256];
+    struct docio_object doc;
+    memset(&doc, 0, sizeof(struct docio_object));
+    doc.key = (void*)keybuf;
+    doc.meta = (void*)metabuf;
+    doc.body = (void*)bodybuf;
+
+    struct filemgr_config config;
+    memset(&config, 0, sizeof(config));
+    config.blocksize = blocksize;
+    config.ncacheblock = 0;
+    config.flag = 0x0;
+    config.options = FILEMGR_CREATE;
+    config.chunksize = sizeof(uint64_t);
+    config.num_wal_shards = 8;
+
+    filemgr_open_result result = filemgr_open((char *) "./hbtrie_testfile",
+                                              get_filemgr_ops(), &config, NULL);
+    struct filemgr *file = result.file;
+    struct docio_handle dhandle;
+    docio_init(&dhandle, file, false);
+
+    struct btreeblk_handle bhandle;
+    btreeblk_init(&bhandle, file, blocksize);
+
+    struct hbtrie trie;
+    hbtrie_init(&trie, 8, 8, blocksize, BLK_NOT_FOUND,
+        (void*)&bhandle, btreeblk_get_ops(), (void*)&dhandle, _readkey_wrap);
+    for (size_t ii = 0; ii < 10; ++ii) {
+        sprintf(dockey, "00000000prefixprefix____%08zu", ii);
+        sprintf(meta, "metadata_%03zu", ii);
+        sprintf(body, "body_%03zu", ii);
+        docsize = _set_doc(&doc, dockey, meta, body);
+        TEST_CHK(docsize != 0);
+        offset = docio_append_doc(&dhandle, &doc, 0, 0);
+        _offset = _endian_encode(offset);
+        hbtrie_insert(&trie, (void*)dockey, strlen(dockey),
+                      (void*)&_offset, (void*)&offset_old);
+        btreeblk_end(&bhandle);
+    }
+
+    filemgr_commit(file, true, NULL);
+    DBG("trie root bid %" _F64 "\n", trie.root_bid);
+
+    {   // Start key greater than the common prefix.
+        char itr_init_key[] = "00000000start";
+        {   // Forward move.
+            struct hbtrie_iterator it;
+            hbtrie_iterator_init(&trie, &it, itr_init_key, strlen(itr_init_key));
+
+            r = hbtrie_next(&it, (void*)keybuf, &keylen, (void*)&offset);
+            TEST_CHK(r != HBTRIE_RESULT_SUCCESS);
+            hbtrie_iterator_free(&it);
+        }
+        {   // Backward move.
+            struct hbtrie_iterator it;
+            hbtrie_iterator_init(&trie, &it, itr_init_key, strlen(itr_init_key));
+
+            r = hbtrie_prev(&it, (void*)keybuf, &keylen, (void*)&offset);
+            TEST_CHK(r == HBTRIE_RESULT_SUCCESS);
+            hbtrie_iterator_free(&it);
+        }
+    }
+    {   // Start key smaller than the common prefix.
+        char itr_init_key[] = "00000000astart";
+        {   // Forward move.
+            struct hbtrie_iterator it;
+            hbtrie_iterator_init(&trie, &it, itr_init_key, strlen(itr_init_key));
+
+            r = hbtrie_next(&it, (void*)keybuf, &keylen, (void*)&offset);
+            TEST_CHK(r == HBTRIE_RESULT_SUCCESS);
+            hbtrie_iterator_free(&it);
+        }
+        {   // Backward move.
+            struct hbtrie_iterator it;
+            hbtrie_iterator_init(&trie, &it, itr_init_key, strlen(itr_init_key));
+
+            r = hbtrie_prev(&it, (void*)keybuf, &keylen, (void*)&offset);
+            TEST_CHK(r != HBTRIE_RESULT_SUCCESS);
+            hbtrie_iterator_free(&it);
+        }
+    }
+
+    filemgr_close(file, true, NULL, NULL);
+    filemgr_shutdown();
+
+    TEST_RESULT("iterator start key greater than prefix test");
+}
+
 int main(){
 #ifdef _MEMPOOL
     mempool_init();
@@ -895,6 +998,7 @@ int main(){
     skew_basic_test();
     hbtrie_reverse_iterator_test();
     hbtrie_partial_update_test();
+    iterator_start_key_greater_than_prefix_test();
     //large_test();
 
     return 0;

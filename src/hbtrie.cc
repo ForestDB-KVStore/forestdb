@@ -629,16 +629,39 @@ static hbtrie_result _hbtrie_prev(struct hbtrie_iterator *it,
                 // chunk number of the b-tree is shorter than current iterator's key
                 if (!HBTRIE_ITR_IS_MOVED(it)) {
                     // The first prev call right after iterator init call.
-                    // This means that the init key is smaller than
-                    // the smallest key of the current tree, and larger than
-                    // the largest key of the previous tree.
-                    // So we have to go back to the parent tree, and
-                    // return the largest key of the previous tree.
-                    mempool_free(bmeta.data);
-                    mempool_free(item_new);
-                    it->keylen = (item->chunkno+1) * trie->chunksize;
-                    HBTRIE_ITR_SET_MOVED(it);
-                    continue;
+                    // Compare the start key and the skipped prefix, and
+                    //   * If the start key is smaller than the skipped prefix:
+                    //     => go back to the parent B+tree and pick the prev entry.
+                    //   * Otherwise: set largest key.
+                    size_t num_chunks_in_key = it->keylen / trie->chunksize;
+                    int chunkcmp = 0;
+                    for (size_t ii = item->chunkno + 1; ii < num_chunks_in_key; ++ii) {
+                        size_t offset_meta = trie->chunksize * (ii - (item->chunkno + 1));
+                        size_t offset_key = trie->chunksize * ii;
+                        chunkcmp = trie->btree_kv_ops->cmp(
+                            (uint8_t*)it->curkey + offset_key,
+                            (uint8_t*)hbmeta.prefix + offset_meta,
+                            trie->aux);
+                        if (chunkcmp < 0) {
+                            // Start key < skipped prefix,
+                            // we have to go back to the parent B+tree and pick the
+                            // prev entry.
+                            mempool_free(bmeta.data);
+                            mempool_free(item_new);
+                            it->keylen = (item->chunkno+1) * trie->chunksize;
+                            HBTRIE_ITR_SET_MOVED(it);
+                            break;
+                        } else if (chunkcmp > 0) {
+                            // Start key > skipped prefix,
+                            // don't need to look further,
+                            // break here and set largest key.
+                            break;
+                        }
+                        // Start key == skipped prefix: keep going.
+                    }
+                    if (chunkcmp < 0) {
+                        continue;
+                    }
                 }
                 // set largest key
                 chunk = alca(uint8_t, trie->chunksize);
@@ -965,8 +988,41 @@ static hbtrie_result _hbtrie_next(struct hbtrie_iterator *it,
                     }
                 }
             } else {
-                // chunk number of the b-tree is longer than current iterator's key
-                // set smallest key
+                // chunk number of the b-tree is longer than current iterator's key.
+                // Compare the start key and the skipped prefix, and
+                //   * If the start key is bigger than the skipped prefix
+                //     => go back to the parent B+tree and pick the next entry.
+                //   * Otherwise: set the smallest key.
+                size_t num_chunks_in_key = it->keylen / trie->chunksize;
+                int chunkcmp = 0;
+                for (size_t ii = item->chunkno + 1; ii < num_chunks_in_key; ++ii) {
+                    size_t offset_meta = trie->chunksize * (ii - (item->chunkno + 1));
+                    size_t offset_key = trie->chunksize * ii;
+                    chunkcmp = trie->btree_kv_ops->cmp(
+                        (uint8_t*)it->curkey + offset_key,
+                        (uint8_t*)hbmeta.prefix + offset_meta,
+                        trie->aux);
+                    if (chunkcmp > 0) {
+                        // Start key > skipped prefix,
+                        // we have to go back to the parent B+tree and pick the next
+                        // entry.
+                        mempool_free(bmeta.data);
+                        mempool_free(item_new);
+                        it->keylen = offset_key;
+                        hr = HBTRIE_RESULT_FAIL;
+                        HBTRIE_ITR_SET_MOVED(it);
+                        break;
+                    } else if (chunkcmp < 0) {
+                        // Start key < skipped prefix.
+                        // don't need to look further,
+                        // break here and set the smallest key.
+                        break;
+                    }
+                    // Start key == skipped prefix: keep going.
+                }
+                if (chunkcmp > 0) {
+                    continue;
+                }
                 chunk = NULL;
             }
 
