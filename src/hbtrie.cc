@@ -1487,8 +1487,10 @@ static hbtrie_result _hbtrie_find(struct hbtrie *trie, void *key, int keylen,
                                 btree->root_bid,
                                 trie->root_bid,
                                 offset);
+#if defined(WIN32) || defined(_WIN32)
                         free(docrawkey);
                         free(dockey);
+#endif
                         return HBTRIE_RESULT_INDEX_CORRUPTED;
                     }
 
