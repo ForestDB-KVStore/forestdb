@@ -1664,15 +1664,15 @@ static fdb_status _wal_flush(struct filemgr *file,
     size_t num_shards = file->wal->num_shards;
     bool do_sort = !filemgr_is_fully_resident(file);
 
-    if (_wal_check_bottom_up_build(dbhandle)) {
-        // If bottom-up build, nothing needs to be done here.
-        return FDB_RESULT_SUCCESS;
-    }
-
     if (do_sort) {
         avl_init(tree, WAL_SORTED_FLUSH);
     } else {
         list_init(list_head);
+    }
+
+    if (_wal_check_bottom_up_build(dbhandle)) {
+        // If bottom-up build, nothing needs to be done here.
+        return FDB_RESULT_SUCCESS;
     }
 
     memset(&root_info, 0xff, sizeof(root_info));
