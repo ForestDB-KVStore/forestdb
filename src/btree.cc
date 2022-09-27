@@ -11,6 +11,7 @@
 #include "btree.h"
 #include "common.h"
 
+#include "forestdb_endian.h"
 #include "list.h"
 
 #ifdef __DEBUG
@@ -1691,4 +1692,153 @@ btree_result btree_next(struct btree_iterator *it, void *key_buf,
     }
     return br;
 }
+
+btree_result btree_init_and_load(
+        struct btree *btree,
+        void *blk_handle,
+        struct btree_blk_ops *blk_ops,
+        struct btree_kv_ops *kv_ops,
+        uint32_t nodesize,
+        uint8_t ksize,
+        uint8_t vsize,
+        bnode_flag_t flag,
+        struct btree_meta *meta,
+        uint64_t num_keys,
+        btree_load_get_next_kv* next_kv,
+        void* aux)
+{
+    void *addr;
+    size_t min_nodesize = 0;
+
+    btree->root_flag = BNODE_MASK_ROOT | flag;
+    btree->blk_ops = blk_ops;
+    btree->blk_handle = blk_handle;
+    btree->kv_ops = kv_ops;
+    btree->height = 1;
+    btree->blksize = nodesize;
+    btree->ksize = ksize;
+    btree->vsize = vsize;
+    if (meta) {
+        btree->root_flag |= BNODE_MASK_METADATA;
+        min_nodesize = sizeof(struct bnode) + _metasize_align(meta->size) +
+                       sizeof(metasize_t) + BLK_MARKER_SIZE;
+    } else {
+        min_nodesize = sizeof(struct bnode) + BLK_MARKER_SIZE;
+    }
+
+    if (min_nodesize > btree->blksize) {
+        // too large metadata .. init fail
+        return BTREE_RESULT_FAIL;
+    }
+
+    // Calculate max # key-values per node.
+    size_t max_num_entries_non_root =
+        (nodesize - sizeof(struct bnode) - BLK_MARKER_SIZE) / (ksize + vsize);
+    size_t max_num_entries_root =
+        meta
+        ? ( nodesize - sizeof(struct bnode) - _metasize_align(meta->size) -
+            sizeof(metasize_t) - BLK_MARKER_SIZE ) / (ksize + vsize)
+        : max_num_entries_non_root;
+
+    if (num_keys <= max_num_entries_root) {
+        // Single height tree.
+        size_t required_size = min_nodesize + num_keys * (ksize + vsize);
+        if (btree->blk_ops->blk_alloc_sub && btree->blk_ops->blk_enlarge_node) {
+            addr = btree->blk_ops->blk_alloc_sub(btree->blk_handle, &btree->root_bid);
+
+            size_t subblock_size =
+                btree->blk_ops->blk_get_size(btree->blk_handle,
+                                             btree->root_bid);
+            if (subblock_size < required_size) {
+                addr = btree->blk_ops->blk_enlarge_node(btree->blk_handle,
+                                                        btree->root_bid,
+                                                        required_size,
+                                                        &btree->root_bid);
+            }
+        } else {
+            addr = btree->blk_ops->blk_alloc(btree->blk_handle, &btree->root_bid);
+        }
+        struct bnode* root_node =
+            _btree_init_node( btree, btree->root_bid, addr,
+                              btree->root_flag, 1, meta );
+
+        // Put entries.
+        for (uint64_t ii = 0; ii < num_keys; ++ii) {
+            void* key_to_insert = nullptr;
+            void* val_to_insert = nullptr;
+            next_kv(&key_to_insert, &val_to_insert, aux);
+            btree->kv_ops->set_kv( root_node, root_node->nentry,
+                                   key_to_insert, val_to_insert );
+            root_node->nentry++;
+        }
+        return BTREE_RESULT_SUCCESS;
+
+    }
+
+    // Otherwise: height >= 2, calculate the tree height.
+    size_t exp_height = 2;
+    uint64_t max_accomm_entries = max_num_entries_root * max_num_entries_non_root;
+    while (max_accomm_entries < num_keys) {
+        exp_height++;
+        max_accomm_entries *= max_num_entries_non_root;
+    }
+
+    struct bnode** cur_node = alca(struct bnode*, exp_height);
+    bid_t* node_bids = alca(bid_t, exp_height);
+    memset(cur_node, 0x0, sizeof(struct bnode*) * exp_height);
+    memset(node_bids, 0x0, sizeof(bid_t) * exp_height);
+
+    uint8_t *k_in_child = alca(uint8_t, btree->ksize);
+
+    for (uint64_t ii = 0; ii < num_keys; ++ii) {
+        for (size_t jj = 0; jj < exp_height; ++jj) {
+            if (!cur_node[jj]) {
+                bid_t new_bid = 0;
+                void* new_addr = btree->blk_ops->blk_alloc( btree->blk_handle,
+                                                            &new_bid );
+                if (jj + 1 < exp_height) {
+                    cur_node[jj] = _btree_init_node( btree, new_bid, new_addr,
+                                                     0x0, jj + 1, NULL );
+                } else {
+                    // Root node, should set the flags.
+                    cur_node[jj] = _btree_init_node( btree, new_bid, new_addr,
+                                                     btree->root_flag, jj + 1,
+                                                     meta );
+                    btree->root_bid = new_bid;
+                }
+                node_bids[jj] = new_bid;
+            }
+
+            if (jj == 0) {
+                // Leaf node: {key, value}
+                void* key_to_insert = nullptr;
+                void* val_to_insert = nullptr;
+                next_kv(&key_to_insert, &val_to_insert, aux);
+                btree->kv_ops->set_kv( cur_node[jj], cur_node[jj]->nentry,
+                                       key_to_insert, val_to_insert );
+            } else {
+                // Non-leaf node: {key, BID of child}
+                bid_t enc_bid = _endian_encode(node_bids[jj - 1]);
+                btree->kv_ops->set_kv( cur_node[jj], cur_node[jj]->nentry,
+                                       k_in_child, &enc_bid );
+            }
+
+            cur_node[jj]->nentry++;
+            if (cur_node[jj]->nentry == 1) {
+                // Need to put the first entry to the parent node.
+                btree->kv_ops->get_kv(cur_node[jj], 0, k_in_child, NULL);
+            } else {
+                if (cur_node[jj]->nentry >= max_num_entries_non_root) {
+                    // Otherwise: full, should allocate a new one.
+                    cur_node[jj] = NULL;
+                    node_bids[jj] = 0;
+                }
+                break;
+            }
+        }
+    }
+
+    return BTREE_RESULT_SUCCESS;
+}
+
 

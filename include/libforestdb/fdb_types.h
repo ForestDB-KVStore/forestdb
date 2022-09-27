@@ -575,6 +575,15 @@ typedef struct {
      * and then cached.
      */
     uint32_t num_blocks_readahead;
+    /**
+     * Activated only when `buk_load_mode` is `true` and
+     * `wal_flush_before_commit` is `false`.
+     * It will accelerate the index build, by building it in a bottom-up manner.
+     * All keys should be inserted in an increasing order, and also
+     * `fdb_commmit()` should be called only once at the end. After the commit,
+     * the DB instance should be closed and then re-opened without this option.
+     */
+    bool bottom_up_index_build;
 } fdb_config;
 
 typedef struct {

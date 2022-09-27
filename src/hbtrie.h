@@ -30,6 +30,15 @@ extern "C" {
 #define HBTRIE_HEADROOM (256)
 
 typedef size_t hbtrie_func_readkey(void *handle, uint64_t offset, void *buf);
+typedef void* hbtrie_load_get_next_entry(void* cur_entry,
+                                         void* aux);
+typedef void hbtrie_load_get_kv_from_entry(void* cur_entry,
+                                           void** key_out,
+                                           size_t* keylen_out,
+                                           void** value_out,
+                                           void* aux);
+typedef void hbtrie_load_btreeblk_end(void* btreeblk_handle);
+
 typedef int hbtrie_cmp_func(void *key1, void *key2, void* aux);
 // a function pointer to a routine that returns a function pointer
 typedef void hbtrie_cmp_map(void* chunk,
@@ -127,6 +136,16 @@ void hbtrie_init(struct hbtrie *trie,
                  void *doc_handle,
                  hbtrie_func_readkey *readkey);
 void hbtrie_free(struct hbtrie *trie);
+
+void hbtrie_init_and_load(struct hbtrie *trie, int chunksize, int valuelen,
+                          int btree_nodesize, bid_t root_bid, void *btreeblk_handle,
+                          struct btree_blk_ops *btree_blk_ops, void *doc_handle,
+                          hbtrie_func_readkey *readkey,
+                          uint64_t num_keys,
+                          hbtrie_load_get_next_entry* get_next_entry,
+                          hbtrie_load_get_kv_from_entry* get_kv_from_entry,
+                          hbtrie_load_btreeblk_end* do_btreeblk_end,
+                          void* aux);
 
 void hbtrie_set_flag(struct hbtrie *trie, uint8_t flag);
 void hbtrie_set_leaf_height_limit(struct hbtrie *trie, uint8_t limit);

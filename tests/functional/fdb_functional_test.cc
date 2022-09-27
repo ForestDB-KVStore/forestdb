@@ -5206,6 +5206,90 @@ void get_nearest_test()
     TEST_RESULT("get nearest test");
 }
 
+void bottom_up_build_test()
+{
+    TEST_INIT();
+    int r;
+    fdb_status s; (void)s;
+
+    memleak_start();
+
+    // remove previous dummy files
+    r = system(SHELL_DEL" dummy* > errorlog.txt");
+    (void)r;
+
+    fdb_config config = fdb_get_default_config();
+    config.do_not_search_wal = true;
+    config.bulk_load_mode = true;
+    config.bottom_up_index_build = true;
+    config.seqtree_opt = FDB_SEQTREE_USE;
+    config.num_wal_partitions = 1;
+    config.wal_flush_before_commit = false;
+
+    fdb_kvs_config kvs_config = fdb_get_default_kvs_config();
+
+    // create a file
+    fdb_file_handle *dbfile;
+    s = fdb_open(&dbfile, "dummy", &config);
+    TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+    fdb_kvs_handle *default_db;
+    s = fdb_kvs_open(dbfile, &default_db, NULL, &kvs_config);
+    TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+    char key[256];
+    char keystr[] = "key%06d";
+    char valuestr[] = "value%08d";
+
+    size_t value_len = 32;
+    char* value = (char*)malloc(value_len);
+    memset(value, 'x', value_len);
+    memcpy(value + value_len - 6, "<end>", 6);
+
+    const int NUM = 100;
+    for (size_t i=0; i<NUM;++i){
+        sprintf(key, keystr, i*10);
+        sprintf(value, valuestr, i);
+        s = fdb_set_kv(default_db, key, strlen(key), value, value_len);
+        TEST_CHK(s == FDB_RESULT_SUCCESS);
+    }
+    s = fdb_commit(dbfile, FDB_COMMIT_MANUAL_WAL_FLUSH);
+
+    s = fdb_kvs_close(default_db);
+    TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+    s = fdb_close(dbfile);
+    TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+    // Re-open and search
+    s = fdb_open(&dbfile, "dummy", &config);
+    TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+    s = fdb_kvs_open(dbfile, &default_db, NULL, &kvs_config);
+    TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+    for (size_t i=0; i<NUM;++i){
+        sprintf(key, keystr, i*10);
+        sprintf(value, valuestr, i);
+        void* value_out = NULL;
+        size_t valuelen_out = 0;
+        s = fdb_get_kv(default_db, key, strlen(key), &value_out, &valuelen_out);
+        TEST_CHK(s == FDB_RESULT_SUCCESS);
+        TEST_CHK( memcmp(value, value_out, valuelen_out) == 0 );
+    }
+
+    s = fdb_kvs_close(default_db);
+    TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+    s = fdb_close(dbfile);
+    TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+    s = fdb_shutdown();
+    memleak_end();
+
+    TEST_RESULT("bottom-up build test");
+}
+
 int main(){
     basic_test();
     init_test();
@@ -5264,6 +5348,6 @@ int main(){
     multi_thread_test(40*1024, 1024, 20, 1, 100, 2, 6);
     apis_with_invalid_handles_test();
     get_nearest_test();
-
+    bottom_up_build_test();
     return 0;
 }

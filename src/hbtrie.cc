@@ -19,6 +19,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "option.h"
+#include "forestdb_endian.h"
 #include "hbtrie.h"
 #include "list.h"
 #include "btree.h"
@@ -1391,6 +1393,8 @@ static hbtrie_result _hbtrie_find(struct hbtrie *trie, void *key, int keylen,
 
         //3 search b-tree using current chunk (or postfix)
         rawkeylen = _hbtrie_reform_key_reverse(trie, key, keylen);
+        // FIXME: Shouldn't it be just
+        //        `rawkeylen == curchunkno * trie->chunksize`?
         if ((cpt_node && rawkeylen == curchunkno * trie->chunksize) ||
             (!cpt_node && nchunk == curchunkno)) {
             // KEY is exactly same as tree's prefix .. return value in metasection
@@ -2464,4 +2468,316 @@ hbtrie_result hbtrie_insert_partial(struct hbtrie *trie,
                                     void *value, void *oldvalue_out) {
     return _hbtrie_insert(trie, rawkey, rawkeylen,
                           value, oldvalue_out, HBTRIE_PARTIAL_UPDATE);
+}
+
+struct local_chunk_and_value {
+    struct list_elem le;
+    uint8_t chunk[8];
+    uint8_t value[8];
+    uint32_t keylen;
+};
+
+struct building_btree_next_kv_params {
+    struct list* chunks_ptr;
+    struct list_elem* cur_le;
+    struct hbtrie* trie;
+};
+
+int _building_btree_next_kv(void** key_out, void** val_out, void* aux) {
+    struct building_btree_next_kv_params* params =
+        (struct building_btree_next_kv_params*)aux;
+    struct local_chunk_and_value* chunk =
+            _get_entry(params->cur_le, struct local_chunk_and_value, le);
+
+    *key_out = (void*)chunk->chunk;
+    *val_out = (void*)chunk->value;
+    params->cur_le = list_next(params->cur_le);
+    return 0;
+}
+
+bid_t _hbtrie_load_recursive(struct hbtrie *trie,
+                             int cur_chunk_idx,
+                             int cp_start_chunk_idx,
+                             uint64_t num_keys,
+                             hbtrie_load_get_next_entry* get_next_entry,
+                             hbtrie_load_get_kv_from_entry* get_kv_from_entry,
+                             hbtrie_load_btreeblk_end* do_btreeblk_end,
+                             void* cur_entry,
+                             void* aux)
+{
+    struct list chunks;
+    list_init(&chunks);
+
+    void* prev_start_entry = NULL;
+    void* prev_key = NULL;
+    void* key = NULL;
+    size_t prev_keylen = 0;
+    size_t keylen = 0;
+
+    uint64_t dup_cnt = 1;
+    uint64_t num_entries = 0;
+
+    // When there is only one chunk, this chunk will be skipped and
+    // kept as a common prefix.
+    bool skip_this_chunk = false;
+    bid_t ret_bid = 0;
+
+    uint8_t prev_chunk[8];
+    uint8_t prev_value[8];
+    uint8_t key_chunk[8];
+    uint8_t key_value[8];
+
+    for (uint64_t ii = 0; ii <= num_keys; ++ii) {
+        memset(prev_chunk, 0x0, 8);
+        memset(key_chunk, 0x0, 8);
+
+        bool same_as_prev = false;
+        if ((int)prev_keylen > cur_chunk_idx * trie->chunksize) {
+            memcpy( prev_chunk,
+                    (uint8_t*)prev_key + cur_chunk_idx * trie->chunksize,
+                    MIN(prev_keylen - cur_chunk_idx * trie->chunksize, trie->chunksize) );
+        } else if (prev_key) {
+            prev_chunk[trie->chunksize - 1] =
+                prev_keylen - ((cur_chunk_idx - 1) * trie->chunksize);
+        }
+
+        if (ii < num_keys) {
+            void* value = NULL;
+            get_kv_from_entry(cur_entry, &key, &keylen, &value, aux);
+            memcpy(key_value, value, trie->valuelen);
+        }
+
+        if ((int)keylen > cur_chunk_idx * trie->chunksize) {
+            memcpy( key_chunk,
+                    (uint8_t*)key + cur_chunk_idx * trie->chunksize,
+                    MIN(keylen - cur_chunk_idx * trie->chunksize, trie->chunksize) );
+        } else {
+            key_chunk[trie->chunksize - 1] =
+                keylen - ((cur_chunk_idx - 1) * trie->chunksize);
+        }
+
+        if ( ii < num_keys &&
+             prev_key &&
+             memcmp(prev_chunk, key_chunk, trie->chunksize) == 0 ) {
+            same_as_prev = true;
+        }
+
+        if (same_as_prev) {
+            // Common prefix, at least > 1 keys share the same chunk.
+            dup_cnt++;
+
+        } else {
+            if (prev_key) {
+                // Insert prev KV into the list.
+                struct local_chunk_and_value* new_chunk =
+                    (struct local_chunk_and_value*)
+                    malloc(sizeof(struct local_chunk_and_value));
+                memcpy(new_chunk->chunk, prev_chunk, trie->chunksize);
+                new_chunk->keylen = prev_keylen;
+
+                if (dup_cnt == 1) {
+                    // Only a single key, directly put value.
+                    memcpy(new_chunk->value, prev_value, trie->valuelen);
+
+                } else {
+                    // Otherwise, recursive call to build a child sub-trie,
+                    // and put the root BID of the sub-trie to the value.
+
+                    // NOTE: If this is the only chunk in this chunk index,
+                    //       we don't need to create a b+tree for this chunk,
+                    //       but put the common prefix in the child tree
+                    //       (except for the first chunk, i.e., idx == 0).
+                    int next_cp_start_chunk_idx = cur_chunk_idx + 1;
+                    if ( ii == num_keys &&
+                         cur_chunk_idx > 0 &&
+                         list_begin(&chunks) == NULL ) {
+                        next_cp_start_chunk_idx = cp_start_chunk_idx;
+                        skip_this_chunk = true;
+                    }
+
+                    uint64_t bid =
+                        _hbtrie_load_recursive( trie,
+                                                cur_chunk_idx + 1,
+                                                next_cp_start_chunk_idx,
+                                                dup_cnt,
+                                                get_next_entry,
+                                                get_kv_from_entry,
+                                                do_btreeblk_end,
+                                                prev_start_entry,
+                                                aux );
+                    uint64_t enc_bid = _endian_encode(bid);
+                    _hbtrie_set_msb(trie, (void*)&enc_bid);
+                    memcpy(new_chunk->value, &enc_bid, trie->valuelen);
+
+                    if (skip_this_chunk) {
+                        ret_bid = bid;
+                    }
+                }
+
+                list_push_back(&chunks, &new_chunk->le);
+                num_entries++;
+                dup_cnt = 1;
+            }
+
+            prev_start_entry = cur_entry;
+            prev_key = key;
+            prev_keylen = keylen;
+            memcpy(prev_value, key_value, trie->valuelen);
+        }
+
+        if (ii < num_keys) {
+            cur_entry = get_next_entry(cur_entry, aux);
+        }
+    }
+
+    // Build a B+tree with the collected key-value pairs,
+    // only when this chunk is not skipped.
+    if (!skip_this_chunk) {
+        struct building_btree_next_kv_params params;
+        params.chunks_ptr = &chunks;
+        params.cur_le = list_begin(&chunks);
+        params.trie = trie;
+
+        struct hbtrie_meta hbmeta;
+        hbmeta.value = NULL;
+
+        if (cur_chunk_idx > 0 && params.cur_le) {
+            struct local_chunk_and_value* cur_chunk_elem =
+                _get_entry(params.cur_le, struct local_chunk_and_value, le);
+            if ((int)cur_chunk_elem->keylen <= (cur_chunk_idx - 1) * trie->chunksize) {
+                // This means the first key is exactly the same as common prefix,
+                // so we should put the value into the prefix section,
+                // instead of an entry.
+                hbmeta.value = cur_chunk_elem->value;
+                params.cur_le = list_next(params.cur_le);
+                num_entries--;
+            } else if ((int)cur_chunk_elem->keylen == cur_chunk_idx * trie->chunksize) {
+                // This is a special marker (00 00 .. 08), we should move it to
+                // the proper position.
+                struct list_elem* le = list_next(&cur_chunk_elem->le);
+                while (le) {
+                    struct local_chunk_and_value* ee =
+                        _get_entry(le, struct local_chunk_and_value, le);
+                    if (memcmp(cur_chunk_elem->chunk, ee->chunk, trie->chunksize) > 0) {
+                        list_remove(&chunks, &cur_chunk_elem->le);
+                        list_insert_after(&chunks, le, &cur_chunk_elem->le);
+                        break;
+                    }
+                    le = list_next(le);
+                }
+                params.cur_le = list_begin(&chunks);
+            }
+        }
+
+        struct btree_meta meta;
+        uint8_t *buf = alca(uint8_t, trie->btree_nodesize);
+        meta.data = buf;
+
+        int new_prefixlen = 0;
+        uint8_t* new_prefix = NULL;
+        if (cp_start_chunk_idx < cur_chunk_idx) {
+            new_prefixlen = (cur_chunk_idx - cp_start_chunk_idx) * trie->chunksize;
+            new_prefix = alca(uint8_t, new_prefixlen);
+            memcpy( new_prefix,
+                    (uint8_t*)prev_key + trie->chunksize * cp_start_chunk_idx,
+                    new_prefixlen );
+        }
+
+        _hbtrie_store_meta(trie, &meta.size, cur_chunk_idx,
+                           HBMETA_NORMAL,
+                           new_prefix, new_prefixlen,
+                           hbmeta.value, meta.data);
+
+        struct btree btree;
+        btree_init_and_load( &btree,
+                             (void*)trie->btreeblk_handle,
+                             trie->btree_blk_ops, trie->btree_kv_ops,
+                             trie->btree_nodesize,
+                             trie->chunksize,
+                             trie->valuelen,
+                             0x0,
+                             &meta,
+                             num_entries,
+                             _building_btree_next_kv,
+                             &params );
+        do_btreeblk_end(trie->btreeblk_handle);
+        ret_bid = btree.root_bid;
+    }
+
+    // Free list.
+    struct list_elem* le = list_begin(&chunks);
+    while (le) {
+        struct local_chunk_and_value* chunk =
+            _get_entry(le, struct local_chunk_and_value, le);
+        le = list_next(&chunk->le);
+        free(chunk);
+    }
+    return ret_bid;
+}
+
+void hbtrie_init_and_load(struct hbtrie *trie, int chunksize, int valuelen,
+                          int btree_nodesize, bid_t root_bid, void *btreeblk_handle,
+                          struct btree_blk_ops *btree_blk_ops, void *doc_handle,
+                          hbtrie_func_readkey *readkey,
+                          uint64_t num_keys,
+                          hbtrie_load_get_next_entry* get_next_entry,
+                          hbtrie_load_get_kv_from_entry* get_kv_from_entry,
+                          hbtrie_load_btreeblk_end* do_btreeblk_end,
+                          void* aux)
+{
+    struct btree_kv_ops *btree_kv_ops, *btree_leaf_kv_ops;
+
+    trie->chunksize = chunksize;
+    trie->valuelen = valuelen;
+    trie->btree_nodesize = btree_nodesize;
+    trie->btree_blk_ops = btree_blk_ops;
+    trie->btreeblk_handle = btreeblk_handle;
+    trie->doc_handle = doc_handle;
+    trie->root_bid = root_bid;
+    trie->flag = 0x0;
+    trie->leaf_height_limit = 0;
+    trie->cmp_args.chunksize = chunksize;
+    trie->cmp_args.cmp_func = NULL;
+    trie->cmp_args.user_param = NULL;
+    trie->aux = &trie->cmp_args;
+
+    // assign key-value operations
+    btree_kv_ops = (struct btree_kv_ops *)malloc(sizeof(struct btree_kv_ops));
+    btree_leaf_kv_ops = (struct btree_kv_ops *)malloc(sizeof(struct btree_kv_ops));
+
+    fdb_assert(valuelen == 8, valuelen, trie);
+    fdb_assert((size_t)chunksize >= sizeof(void *), chunksize, trie);
+
+    if (chunksize == 8 && valuelen == 8){
+        btree_kv_ops = btree_kv_get_kb64_vb64(btree_kv_ops);
+        btree_leaf_kv_ops = _get_leaf_kv_ops(btree_leaf_kv_ops);
+    } else if (chunksize == 4 && valuelen == 8) {
+        btree_kv_ops = btree_kv_get_kb32_vb64(btree_kv_ops);
+        btree_leaf_kv_ops = _get_leaf_kv_ops(btree_leaf_kv_ops);
+    } else {
+        btree_kv_ops = btree_kv_get_kbn_vb64(btree_kv_ops);
+        btree_leaf_kv_ops = _get_leaf_kv_ops(btree_leaf_kv_ops);
+    }
+
+    trie->btree_kv_ops = btree_kv_ops;
+    trie->btree_leaf_kv_ops = btree_leaf_kv_ops;
+    trie->readkey = readkey;
+    trie->map = NULL;
+    trie->last_map_chunk = (void *)malloc(chunksize);
+    memset(trie->last_map_chunk, 0xff, chunksize); // set 0xffff...
+
+    if (!num_keys) {
+        return;
+    }
+
+    void* cur_entry = get_next_entry(NULL, aux);
+    trie->root_bid = _hbtrie_load_recursive( trie,
+                                             0,
+                                             0,
+                                             num_keys,
+                                             get_next_entry,
+                                             get_kv_from_entry,
+                                             do_btreeblk_end,
+                                             cur_entry,
+                                             aux );
 }

@@ -15,6 +15,8 @@
  *   limitations under the License.
  */
 
+#include "avltree.h"
+#include "libforestdb/fdb_errors.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -4644,6 +4646,111 @@ fdb_status fdb_commit_non_durable(fdb_file_handle *fhandle,
     return _fdb_commit( fhandle->root, opt, false );
 }
 
+void* _fdb_bottom_up_index_build_next(void* cur_entry, void* aux) {
+    if (!cur_entry) {
+        struct avl_tree* tree = (struct avl_tree*)aux;
+        return avl_first(tree);
+    }
+    struct avl_node* an = (struct avl_node*)cur_entry;
+    return avl_next(an);
+}
+
+void _fdb_bottom_up_index_build_get(void* cur_entry,
+                                    void** key_out,
+                                    size_t* keylen_out,
+                                    void** value_out,
+                                    void* aux)
+{
+    struct wal_item_header* header =
+        _get_entry(cur_entry, struct wal_item_header, avl_key);
+    *key_out = header->key;
+    *keylen_out = header->keylen;
+
+    thread_local uint64_t enc_bid;
+    struct list_elem* le = list_begin(&header->items);
+    struct wal_item* first_item = _get_entry(le, struct wal_item, list_elem);
+    enc_bid = _endian_encode(first_item->offset);
+    *value_out = &enc_bid;
+}
+
+void _fdb_bottom_up_index_btreeblk_end(void* voidhandle) {
+    btreeblk_end((struct btreeblk_handle*)voidhandle);
+}
+
+void _fdb_bottom_up_index_build_get_seq(void* cur_entry,
+                                        void** key_out,
+                                        size_t* keylen_out,
+                                        void** value_out,
+                                        void* aux)
+{
+    struct wal_item* elem =
+        _get_entry(cur_entry, struct wal_item, avl_seq);
+    thread_local uint64_t enc_seq;
+    enc_seq = _endian_encode(elem->seqnum);
+    *key_out = &enc_seq;
+    *keylen_out = sizeof(enc_seq);
+
+    thread_local uint64_t enc_bid;
+    enc_bid = _endian_encode(elem->offset);
+    *value_out = &enc_bid;
+}
+
+fdb_status _fdb_bottom_up_index_build(fdb_kvs_handle *handle)
+{
+    fdb_status fs = FDB_RESULT_SUCCESS;
+
+    uint64_t num_entries = handle->file->wal->num_flushable;
+    struct avl_tree* avl_key = &handle->file->wal->key_shards[0]._map;
+    struct avl_tree* avl_seq =
+        handle->file->wal->seq_shards
+        ? &handle->file->wal->seq_shards[0]._map : NULL;
+
+    // Build key-index first (tree is sorted by key).
+    struct hbtrie new_key_trie;
+    hbtrie_init_and_load(&new_key_trie, 8, 8, handle->trie->btree_nodesize,
+                         handle->trie->root_bid,
+                         (void*)handle->trie->btreeblk_handle,
+                         handle->trie->btree_blk_ops,
+                         (void*)handle->trie->doc_handle,
+                         handle->trie->readkey,
+                         num_entries,
+                         _fdb_bottom_up_index_build_next,
+                         _fdb_bottom_up_index_build_get,
+                         _fdb_bottom_up_index_btreeblk_end,
+                         avl_key);
+    handle->trie->root_bid = new_key_trie.root_bid;
+
+    // Build seq-index next.
+    if (handle->seqtrie) {
+        struct hbtrie new_seq_trie;
+        hbtrie_init_and_load(&new_seq_trie, 8, 8, handle->seqtrie->btree_nodesize,
+                             handle->seqtrie->root_bid,
+                             (void*)handle->seqtrie->btreeblk_handle,
+                             handle->seqtrie->btree_blk_ops,
+                             (void*)handle->seqtrie->doc_handle,
+                             handle->seqtrie->readkey,
+                             num_entries,
+                             _fdb_bottom_up_index_build_next,
+                             _fdb_bottom_up_index_build_get_seq,
+                             _fdb_bottom_up_index_btreeblk_end,
+                             avl_seq);
+        handle->seqtrie->root_bid = new_seq_trie.root_bid;
+    } else if (handle->seqtree) {
+        // Not supported yet.
+    }
+
+    // Update stats.
+    struct kvs_stat stat_dst;
+    stat_dst.ndocs = num_entries;
+    stat_dst.ndeletes = 0;
+    stat_dst.datasize = handle->file->wal->datasize;
+    stat_dst.nlivenodes = handle->bhandle->nlivenodes;
+    stat_dst.deltasize = 0;
+    _kvs_stat_set(handle->file, 0, stat_dst);
+
+    return fs;
+}
+
 fdb_status _fdb_commit(fdb_kvs_handle *handle,
                        fdb_commit_opt_t opt,
                        bool sync)
@@ -4744,6 +4851,10 @@ fdb_commit_start:
                        _fdb_wal_flush_func, _fdb_wal_get_old_offset,
                        _fdb_wal_flush_seq_purge, _fdb_wal_flush_kvs_delta_stats,
                        &flush_items);
+
+        if (handle->config.bottom_up_index_build) {
+            _fdb_bottom_up_index_build(handle);
+        }
 
         if (wr != FDB_RESULT_SUCCESS) {
             btreeblk_clear_dirty_update(handle->bhandle);
