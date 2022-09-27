@@ -185,6 +185,21 @@ btree_result btree_init(
         uint32_t nodesize, uint8_t ksize, uint8_t vsize,
         bnode_flag_t flag, struct btree_meta *meta);
 
+typedef int btree_load_get_next_kv(void** key_out, void** value_out, void* aux);
+btree_result btree_init_and_load(
+        struct btree *btree,
+        void *blk_handle,
+        struct btree_blk_ops *blk_ops,
+        struct btree_kv_ops *kv_ops,
+        uint32_t nodesize,
+        uint8_t ksize,
+        uint8_t vsize,
+        bnode_flag_t flag,
+        struct btree_meta *meta,
+        uint64_t num_keys,
+        btree_load_get_next_kv* next_kv,
+        void* aux);
+
 btree_result btree_iterator_init(struct btree *btree, struct btree_iterator *it, void *initial_key);
 btree_result btree_iterator_free(struct btree_iterator *it);
 btree_result btree_next(struct btree_iterator *it, void *key_buf, void *value_buf);

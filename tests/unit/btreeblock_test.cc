@@ -752,6 +752,122 @@ void btree_reverse_iterator_test()
     TEST_RESULT("btree reverse iterator test");
 }
 
+int btree_load_next_kv(void** key_out, void** val_out, void* aux) {
+    uint64_t* idx = (uint64_t*)aux;
+    static char kk[16];
+    static char vv[16];
+    sprintf(kk, "k%07lu", *idx);
+    sprintf(vv, "v%07lu", *idx);
+    (*idx)++;
+    *key_out = (void*)kk;
+    *val_out = (void*)vv;
+    return 0;
+}
+
+#include <sys/time.h>
+
+void btree_initial_load_test(uint64_t num_entries)
+{
+    TEST_INIT();
+
+    int ksize = 8, vsize = 8, r;
+    int nodesize = 4096;
+    struct filemgr *file;
+    struct btreeblk_handle bhandle;
+    struct btree btree;
+    struct filemgr_config f_config;
+    struct btree_kv_ops *kv_ops;
+    filemgr_open_result fr;
+    char *fname = (char *) "./btreeblock_testfile";
+
+    r = system(SHELL_DEL" btreeblock_testfile");
+    (void)r;
+
+    memleak_start();
+
+    memset(&f_config, 0, sizeof(f_config));
+    f_config.blocksize = nodesize;
+    f_config.options = FILEMGR_CREATE;
+    f_config.num_wal_shards = 8;
+    fr = filemgr_open(fname, get_filemgr_ops(), &f_config, NULL);
+    file = fr.file;
+
+    struct timeval st, et;
+    gettimeofday(&st, NULL);
+
+    btreeblk_init(&bhandle, file, nodesize);
+    kv_ops = btree_kv_get_kb64_vb64(NULL);
+
+    uint64_t idx = 0;
+
+#if 1
+    btree_init_and_load(&btree, (void*)&bhandle,
+                        btreeblk_get_ops(), kv_ops,
+                        nodesize, ksize, vsize, 0x0, NULL,
+                        num_entries, btree_load_next_kv, &idx);
+    btreeblk_end(&bhandle);
+#else
+    btree_init(&btree, (void*)&bhandle,
+               btreeblk_get_ops(), kv_ops,
+               nodesize, ksize, vsize, 0x0, NULL);
+    for (size_t ii = 0; ii < num_entries; ++ii) {
+        char key[16];
+        char val[16];
+        sprintf(key, "k%07zu", ii);
+        sprintf(val, "v%07zu", ii);
+        btree_insert(&btree, key, val);
+        btreeblk_end(&bhandle);
+    }
+
+#endif
+    gettimeofday(&et, NULL);
+    btreeblk_free(&bhandle);
+
+    {
+        uint64_t ust = st.tv_sec * 1000000UL + st.tv_usec;
+        uint64_t uet = et.tv_sec * 1000000UL + et.tv_usec;
+        printf("%lu us elapsed, %.1f ops/s\n",
+               uet - ust,
+               (double)num_entries / (uet - ust) * 1000000.0);
+    }
+
+    gettimeofday(&st, NULL);
+
+    struct btree btree_verify;
+    struct btreeblk_handle bhandle_verify;
+    btreeblk_init(&bhandle_verify, file, nodesize);
+    btree_init_from_bid(&btree_verify, &bhandle_verify, btreeblk_get_ops(), kv_ops,
+                        nodesize, btree.root_bid);
+    for (size_t ii = 0; ii < num_entries; ++ii) {
+        char key[16];
+        char val[16];
+        char val_verify[16];
+        sprintf(key, "k%07zu", ii);
+        sprintf(val_verify, "v%07zu", ii);
+        btree_find(&btree_verify, key, val);
+        btreeblk_end(&bhandle_verify);
+        TEST_CHK(memcmp(val, val_verify, 8) == 0);
+    }
+    btreeblk_free(&bhandle_verify);
+
+    gettimeofday(&et, NULL);
+    {
+        uint64_t ust = st.tv_sec * 1000000UL + st.tv_usec;
+        uint64_t uet = et.tv_sec * 1000000UL + et.tv_usec;
+        printf("%lu us elapsed, %.1f ops/s\n",
+               uet - ust,
+               (double)num_entries / (uet - ust) * 1000000.0);
+    }
+
+    free(kv_ops);
+    filemgr_close(file, true, NULL, NULL);
+    filemgr_shutdown();
+
+    memleak_end();
+
+    TEST_RESULT("btree init and load test");
+}
+
 int main()
 {
 #ifdef _MEMPOOL
@@ -764,6 +880,8 @@ int main()
     range_test();
     subblock_test();
     btree_reverse_iterator_test();
+    btree_initial_load_test(10);
+    btree_initial_load_test(100000);
 
     return 0;
 }

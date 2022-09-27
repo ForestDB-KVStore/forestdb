@@ -176,7 +176,8 @@ target_link_libraries(hbtrie_test ${PTHREAD_LIB} ${LIBM} ${SNAPPY_LIBRARIES}
                       ${ASYNC_IO_LIB} ${MALLOC_LIBRARIES}
                       ${PLATFORM_LIBRARY} ${CRYPTO_LIB}
                       ${DL_LIBRARIES} ${BREAKPAD_LIBRARIES})
-set_target_properties(hbtrie_test PROPERTIES COMPILE_FLAGS "${CB_GNU_CXX11_OPTION}")
+set_target_properties(hbtrie_test PROPERTIES COMPILE_FLAGS
+                      "${CB_GNU_CXX11_OPTION}")
 
 add_executable(btree_str_kv_test
                btree_str_kv_test.cc

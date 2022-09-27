@@ -1632,6 +1632,18 @@ INLINE void _wal_restore_root_info(void *voidhandle,
     }
 }
 
+INLINE bool _wal_check_bottom_up_build(void* voidhandle) {
+    fdb_kvs_handle *handle = (fdb_kvs_handle*)voidhandle;
+    if ( handle &&
+         handle->config.bulk_load_mode &&
+         !handle->config.wal_flush_before_commit &&
+         handle->config.num_wal_partitions == 1 &&
+         handle->config.bottom_up_index_build ) {
+        return true;
+    }
+    return false;
+}
+
 static fdb_status _wal_flush(struct filemgr *file,
                              void *dbhandle,
                              wal_flush_func *flush_func,
@@ -1651,6 +1663,11 @@ static fdb_status _wal_flush(struct filemgr *file,
     size_t i = 0;
     size_t num_shards = file->wal->num_shards;
     bool do_sort = !filemgr_is_fully_resident(file);
+
+    if (_wal_check_bottom_up_build(dbhandle)) {
+        // If bottom-up build, nothing needs to be done here.
+        return FDB_RESULT_SUCCESS;
+    }
 
     if (do_sort) {
         avl_init(tree, WAL_SORTED_FLUSH);
@@ -1695,6 +1712,7 @@ static fdb_status _wal_flush(struct filemgr *file,
                         } else {
                             list_push_back(list_head, &item->list_elem_flush);
                         }
+
                     } else {
                         spin_unlock(&file->wal->key_shards[i].lock);
                         item->old_offset = get_old_offset(dbhandle, item);

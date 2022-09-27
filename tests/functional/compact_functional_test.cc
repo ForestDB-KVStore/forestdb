@@ -1380,7 +1380,7 @@ void db_compact_overwrite()
 
     // verify db2 seqnum and close
     fdb_get_kvs_info(db2, &kvs_info);
-    TEST_CHK(kvs_info.last_seqnum = 2*n);
+    TEST_CHK(kvs_info.last_seqnum == (uint64_t)2*n);
     fdb_kvs_close(db2);
     fdb_close(dbfile2);
 
@@ -1418,7 +1418,7 @@ void db_compact_overwrite()
     TEST_CHK(status == FDB_RESULT_SUCCESS);
 
     fdb_get_kvs_info(db2, &kvs_info);
-    TEST_CHK(kvs_info.last_seqnum = 2*n);
+    TEST_CHK(kvs_info.last_seqnum == (uint64_t)2*n);
 
     // read db2
     for (i=0;i<2*n;++i){

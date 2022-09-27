@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include "hbtrie.h"
+#include "libforestdb/forestdb.h"
 #include "test.h"
 #include "btreeblock.h"
 #include "docio.h"
@@ -32,6 +33,23 @@ uint32_t _set_doc(struct docio_object *doc, char *key, char *meta, char *body)
 {
     strcpy((char*)doc->key, key);
     doc->length.keylen = strlen((char*)doc->key);
+    strcpy((char*)doc->meta, meta);
+    doc->length.metalen = strlen((char*)doc->meta);
+    strcpy((char*)doc->body, body);
+    doc->length.bodylen = strlen((char*)doc->body);
+
+    return sizeof(struct docio_length) + doc->length.keylen +
+           doc->length.metalen + doc->length.bodylen;
+}
+
+uint32_t _set_doc_bin(struct docio_object *doc,
+                      char *key,
+                      size_t keylen,
+                      char *meta,
+                      char *body)
+{
+    memcpy((char*)doc->key, key, keylen);
+    doc->length.keylen = keylen;
     strcpy((char*)doc->meta, meta);
     doc->length.metalen = strlen((char*)doc->meta);
     strcpy((char*)doc->body, body);
@@ -187,6 +205,10 @@ void basic_test()
         DBG("%s\n", keybuf);
     }
     hbtrie_iterator_free(&it);
+
+    hbtrie_free(&trie);
+    docio_free(&dhandle);
+    btreeblk_free(&bhandle);
 
     filemgr_close(file, true, NULL, NULL);
     filemgr_shutdown();
@@ -982,10 +1004,498 @@ void iterator_start_key_greater_than_prefix_test()
         }
     }
 
+    hbtrie_free(&trie);
+    docio_free(&dhandle);
+    btreeblk_free(&bhandle);
+
     filemgr_close(file, true, NULL, NULL);
     filemgr_shutdown();
 
     TEST_RESULT("iterator start key greater than prefix test");
+}
+
+struct initial_load_elem {
+    struct list_elem le;
+    uint8_t* key;
+    size_t keylen;
+    uint8_t value[8];
+};
+
+void* initial_load_next(void* cur_entry, void* aux) {
+    if (!cur_entry) {
+        struct list* list = (struct list*)aux;
+        return list_begin(list);
+    }
+    struct list_elem* le = (struct list_elem*)cur_entry;
+    return list_next(le);
+}
+
+void initial_load_get(void* cur_entry,
+                      void** key_out,
+                      size_t* keylen_out,
+                      void** value_out,
+                      void* aux)
+{
+    struct initial_load_elem* elem = _get_entry(cur_entry, struct initial_load_elem, le);
+    *key_out = elem->key;
+    *keylen_out = elem->keylen;
+    *value_out = elem->value;
+}
+
+void initial_btreeblk_end(void* voidhandle) {
+    btreeblk_end((struct btreeblk_handle*)voidhandle);
+}
+
+void initial_load_test_single_common_prefix()
+{
+    TEST_INIT();
+
+    int blocksize = 4096;
+    uint64_t offset, _offset;
+    uint32_t docsize;
+    char dockey[256], meta[256], body[256];
+    hbtrie_result r;
+
+    int rr = system(SHELL_DEL " hbtrie_testfile");
+    (void)rr;
+
+    char keybuf[256], metabuf[256], bodybuf[256];
+    struct docio_object doc;
+    memset(&doc, 0, sizeof(struct docio_object));
+    doc.key = (void*)keybuf;
+    doc.meta = (void*)metabuf;
+    doc.body = (void*)bodybuf;
+
+    struct filemgr_config config;
+    memset(&config, 0, sizeof(config));
+    config.blocksize = blocksize;
+    config.ncacheblock = 0;
+    config.flag = 0x0;
+    config.options = FILEMGR_CREATE;
+    config.chunksize = sizeof(uint64_t);
+    config.num_wal_shards = 8;
+
+    filemgr_open_result result = filemgr_open((char *) "./hbtrie_testfile",
+                                              get_filemgr_ops(), &config, NULL);
+    struct filemgr *file = result.file;
+    struct docio_handle dhandle;
+    docio_init(&dhandle, file, false);
+
+    struct btreeblk_handle bhandle;
+    btreeblk_init(&bhandle, file, blocksize);
+
+    struct list entries;
+    list_init(&entries);
+    for (size_t ii = 0; ii < 100; ++ii) {
+        sprintf(dockey, "00000000prefixprefix____%08zu", ii);
+        sprintf(meta, "metadata_%03zu", ii);
+        sprintf(body, "body_%03zu", ii);
+        docsize = _set_doc(&doc, dockey, meta, body);
+        TEST_CHK(docsize != 0);
+        offset = docio_append_doc(&dhandle, &doc, 0, 0);
+        _offset = _endian_encode(offset);
+
+        struct initial_load_elem* ile =
+            (struct initial_load_elem*)malloc(sizeof(struct initial_load_elem));
+        ile->keylen = strlen(dockey);
+        ile->key = (uint8_t*)malloc(ile->keylen);
+        memcpy(ile->key, dockey, ile->keylen);
+        memcpy(ile->value, &_offset, sizeof(_offset));
+        list_push_back(&entries, &ile->le);
+    }
+
+    struct hbtrie trie;
+    hbtrie_init_and_load(&trie, 8, 8, blocksize, BLK_NOT_FOUND,
+                         (void*)&bhandle, btreeblk_get_ops(),
+                         (void*)&dhandle, _readkey_wrap,
+                         100,
+                         initial_load_next, initial_load_get, initial_btreeblk_end,
+                         &entries);
+
+    filemgr_commit(file, true, NULL);
+    DBG("trie root bid %" _F64 "\n", trie.root_bid);
+
+    for (size_t ii = 0; ii < 100; ++ii) {
+        sprintf(dockey, "00000000prefixprefix____%08zu", ii);
+        sprintf(meta, "metadata_%03zu", ii);
+        sprintf(body, "body_%03zu", ii);
+
+        uint8_t valuebuf[8];
+        r = hbtrie_find(&trie, (void*)dockey, strlen(dockey), (void*)valuebuf);
+        btreeblk_end(&bhandle);
+        TEST_CHK(r != HBTRIE_RESULT_FAIL);
+
+        if (r != HBTRIE_RESULT_FAIL) {
+            memcpy(&_offset, valuebuf, 8);
+            _offset = _endian_decode(_offset);
+            docio_read_doc(&dhandle, _offset, &doc, true);
+
+            TEST_CHK(!memcmp(doc.key, dockey, doc.length.keylen));
+            TEST_CHK(!memcmp(doc.meta, meta, doc.length.metalen));
+            TEST_CHK(!memcmp(doc.body, body, doc.length.bodylen));
+        }
+    }
+
+    hbtrie_free(&trie);
+    docio_free(&dhandle);
+    btreeblk_free(&bhandle);
+
+    filemgr_close(file, true, NULL, NULL);
+    filemgr_shutdown();
+
+    struct list_elem* le = list_begin(&entries);
+    while (le) {
+        struct initial_load_elem* ile =
+            _get_entry(le, struct initial_load_elem, le);
+        le = list_next(le);
+        free(ile->key);
+        free(ile);
+    }
+
+    TEST_RESULT("initial load with single common prefix test");
+}
+
+void initial_load_test_nested_common_prefix()
+{
+    TEST_INIT();
+
+    int blocksize = 4096;
+    uint64_t offset, _offset;
+    uint32_t docsize;
+    char dockey[256], meta[256], body[256];
+    hbtrie_result r;
+
+    int rr = system(SHELL_DEL " hbtrie_testfile");
+    (void)rr;
+
+    char keybuf[256], metabuf[256], bodybuf[256];
+    struct docio_object doc;
+    memset(&doc, 0, sizeof(struct docio_object));
+    doc.key = (void*)keybuf;
+    doc.meta = (void*)metabuf;
+    doc.body = (void*)bodybuf;
+
+    struct filemgr_config config;
+    memset(&config, 0, sizeof(config));
+    config.blocksize = blocksize;
+    config.ncacheblock = 0;
+    config.flag = 0x0;
+    config.options = FILEMGR_CREATE;
+    config.chunksize = sizeof(uint64_t);
+    config.num_wal_shards = 8;
+
+    filemgr_open_result result = filemgr_open((char *) "./hbtrie_testfile",
+                                              get_filemgr_ops(), &config, NULL);
+    struct filemgr *file = result.file;
+    struct docio_handle dhandle;
+    docio_init(&dhandle, file, false);
+
+    struct btreeblk_handle bhandle;
+    btreeblk_init(&bhandle, file, blocksize);
+
+    struct list entries;
+    list_init(&entries);
+    for (size_t ii = 0; ii < 10; ++ii) {
+        for (size_t jj = 0; jj < 1000; ++jj) {
+            sprintf(dockey, "00000000%08zu%08zuabc", ii, jj);
+            sprintf(meta, "metadata_%03zu", jj);
+            sprintf(body, "body_%03zu", jj);
+            docsize = _set_doc(&doc, dockey, meta, body);
+            TEST_CHK(docsize != 0);
+            offset = docio_append_doc(&dhandle, &doc, 0, 0);
+            _offset = _endian_encode(offset);
+
+            struct initial_load_elem* ile =
+                (struct initial_load_elem*)malloc(sizeof(struct initial_load_elem));
+            ile->keylen = strlen(dockey);
+            ile->key = (uint8_t*)malloc(ile->keylen);
+            memcpy(ile->key, dockey, ile->keylen);
+            memcpy(ile->value, &_offset, sizeof(_offset));
+            list_push_back(&entries, &ile->le);
+        }
+    }
+
+    struct hbtrie trie;
+    hbtrie_init_and_load(&trie, 8, 8, blocksize, BLK_NOT_FOUND,
+                         (void*)&bhandle, btreeblk_get_ops(),
+                         (void*)&dhandle, _readkey_wrap,
+                         10000,
+                         initial_load_next, initial_load_get, initial_btreeblk_end,
+                         &entries);
+
+    filemgr_commit(file, true, NULL);
+    DBG("trie root bid %" _F64 "\n", trie.root_bid);
+
+    for (size_t ii = 0; ii < 10; ++ii) {
+        for (size_t jj = 0; jj < 1000; ++jj) {
+            sprintf(dockey, "00000000%08zu%08zuabc", ii, jj);
+            sprintf(meta, "metadata_%03zu", jj);
+            sprintf(body, "body_%03zu", jj);
+
+            uint8_t valuebuf[8];
+            r = hbtrie_find(&trie, (void*)dockey, strlen(dockey), (void*)valuebuf);
+            btreeblk_end(&bhandle);
+            TEST_CHK(r != HBTRIE_RESULT_FAIL);
+
+            if (r != HBTRIE_RESULT_FAIL) {
+                memcpy(&_offset, valuebuf, 8);
+                _offset = _endian_decode(_offset);
+                docio_read_doc(&dhandle, _offset, &doc, true);
+
+                TEST_CHK(!memcmp(doc.key, dockey, doc.length.keylen));
+                TEST_CHK(!memcmp(doc.meta, meta, doc.length.metalen));
+                TEST_CHK(!memcmp(doc.body, body, doc.length.bodylen));
+            }
+        }
+    }
+
+    hbtrie_free(&trie);
+    docio_free(&dhandle);
+    btreeblk_free(&bhandle);
+
+    filemgr_close(file, true, NULL, NULL);
+    filemgr_shutdown();
+
+    struct list_elem* le = list_begin(&entries);
+    while (le) {
+        struct initial_load_elem* ile =
+            _get_entry(le, struct initial_load_elem, le);
+        le = list_next(le);
+        free(ile->key);
+        free(ile);
+    }
+
+    TEST_RESULT("initial load with nested common prefix test");
+}
+
+void initial_load_test_tailing_null()
+{
+    TEST_INIT();
+
+    int blocksize = 4096;
+    uint64_t offset, _offset;
+    uint32_t docsize;
+    char dockey[256], meta[256], body[256];
+    hbtrie_result r;
+
+    int rr = system(SHELL_DEL " hbtrie_testfile");
+    (void)rr;
+
+    char keybuf[256], metabuf[256], bodybuf[256];
+    struct docio_object doc;
+    memset(&doc, 0, sizeof(struct docio_object));
+    doc.key = (void*)keybuf;
+    doc.meta = (void*)metabuf;
+    doc.body = (void*)bodybuf;
+
+    struct filemgr_config config;
+    memset(&config, 0, sizeof(config));
+    config.blocksize = blocksize;
+    config.ncacheblock = 0;
+    config.flag = 0x0;
+    config.options = FILEMGR_CREATE;
+    config.chunksize = sizeof(uint64_t);
+    config.num_wal_shards = 8;
+
+    filemgr_open_result result = filemgr_open((char *) "./hbtrie_testfile",
+                                              get_filemgr_ops(), &config, NULL);
+    struct filemgr *file = result.file;
+    struct docio_handle dhandle;
+    docio_init(&dhandle, file, false);
+
+    struct btreeblk_handle bhandle;
+    btreeblk_init(&bhandle, file, blocksize);
+
+    memset(dockey, 0x0, 256);
+    sprintf(dockey, "00000000");
+
+    struct list entries;
+    list_init(&entries);
+    for (size_t ii = 0; ii < 8; ++ii) {
+        sprintf(meta, "metadata_%03zu", ii);
+        sprintf(body, "body_%03zu", ii);
+        docsize = _set_doc_bin(&doc, dockey, 8 + ii, meta, body);
+        TEST_CHK(docsize != 0);
+        offset = docio_append_doc(&dhandle, &doc, 0, 0);
+        _offset = _endian_encode(offset);
+
+        struct initial_load_elem* ile =
+            (struct initial_load_elem*)malloc(sizeof(struct initial_load_elem));
+        ile->keylen = doc.length.keylen;
+        ile->key = (uint8_t*)malloc(ile->keylen);
+        memcpy(ile->key, dockey, ile->keylen);
+        memcpy(ile->value, &_offset, sizeof(_offset));
+        list_push_back(&entries, &ile->le);
+    }
+
+    struct hbtrie trie;
+    hbtrie_init_and_load(&trie, 8, 8, blocksize, BLK_NOT_FOUND,
+                         (void*)&bhandle, btreeblk_get_ops(),
+                         (void*)&dhandle, _readkey_wrap,
+                         8,
+                         initial_load_next, initial_load_get, initial_btreeblk_end,
+                         &entries);
+
+    filemgr_commit(file, true, NULL);
+    DBG("trie root bid %" _F64 "\n", trie.root_bid);
+
+    for (size_t ii = 0; ii < 8; ++ii) {
+        sprintf(meta, "metadata_%03zu", ii);
+        sprintf(body, "body_%03zu", ii);
+
+        uint8_t valuebuf[8];
+        r = hbtrie_find(&trie, (void*)dockey, 8 + ii, (void*)valuebuf);
+        btreeblk_end(&bhandle);
+        TEST_CHK(r != HBTRIE_RESULT_FAIL);
+
+        if (r != HBTRIE_RESULT_FAIL) {
+            memcpy(&_offset, valuebuf, 8);
+            _offset = _endian_decode(_offset);
+            docio_read_doc(&dhandle, _offset, &doc, true);
+
+            TEST_CHK(!memcmp(doc.key, dockey, doc.length.keylen));
+            TEST_CHK(!memcmp(doc.meta, meta, doc.length.metalen));
+            TEST_CHK(!memcmp(doc.body, body, doc.length.bodylen));
+        }
+    }
+
+    hbtrie_free(&trie);
+    docio_free(&dhandle);
+    btreeblk_free(&bhandle);
+
+    filemgr_close(file, true, NULL, NULL);
+    filemgr_shutdown();
+
+    struct list_elem* le = list_begin(&entries);
+    while (le) {
+        struct initial_load_elem* ile =
+            _get_entry(le, struct initial_load_elem, le);
+        le = list_next(le);
+        free(ile->key);
+        free(ile);
+    }
+
+    TEST_RESULT("initial load with tailing null test");
+}
+
+void initial_load_test_incremental_prefix()
+{
+    TEST_INIT();
+
+    int blocksize = 4096;
+    uint64_t offset, _offset;
+    uint32_t docsize;
+    char dockey[256], meta[256], body[256];
+    hbtrie_result r;
+
+    int rr = system(SHELL_DEL " hbtrie_testfile");
+    (void)rr;
+
+    char keybuf[256], metabuf[256], bodybuf[256];
+    struct docio_object doc;
+    memset(&doc, 0, sizeof(struct docio_object));
+    doc.key = (void*)keybuf;
+    doc.meta = (void*)metabuf;
+    doc.body = (void*)bodybuf;
+
+    struct filemgr_config config;
+    memset(&config, 0, sizeof(config));
+    config.blocksize = blocksize;
+    config.ncacheblock = 0;
+    config.flag = 0x0;
+    config.options = FILEMGR_CREATE;
+    config.chunksize = sizeof(uint64_t);
+    config.num_wal_shards = 8;
+
+    filemgr_open_result result = filemgr_open((char *) "./hbtrie_testfile",
+                                              get_filemgr_ops(), &config, NULL);
+    struct filemgr *file = result.file;
+    struct docio_handle dhandle;
+    docio_init(&dhandle, file, false);
+
+    struct btreeblk_handle bhandle;
+    btreeblk_init(&bhandle, file, blocksize);
+
+    memset(dockey, 0x0, 256);
+    sprintf(dockey, "00000000aaaaaaaabbbbbbbb");
+
+    struct hbtrie trie;
+
+#if 0
+    uint64_t offset_old;
+    hbtrie_init(&trie, 8, 8, blocksize, BLK_NOT_FOUND,
+                (void*)&bhandle, btreeblk_get_ops(), (void*)&dhandle, _readkey_wrap);
+#endif
+    struct list entries;
+    list_init(&entries);
+    for (size_t ii = 0; ii < 8; ++ii) {
+        sprintf(meta, "metadata_%03zu", ii);
+        sprintf(body, "body_%03zu", ii);
+        docsize = _set_doc_bin(&doc, dockey, 16 + ii, meta, body);
+        TEST_CHK(docsize != 0);
+        offset = docio_append_doc(&dhandle, &doc, 0, 0);
+        _offset = _endian_encode(offset);
+
+#if 0
+        hbtrie_insert(&trie, (void*)dockey, doc.length.keylen,
+                      (void*)&_offset, (void*)&offset_old);
+        btreeblk_end(&bhandle);
+#endif
+        struct initial_load_elem* ile =
+            (struct initial_load_elem*)malloc(sizeof(struct initial_load_elem));
+        ile->keylen = doc.length.keylen;
+        ile->key = (uint8_t*)malloc(ile->keylen);
+        memcpy(ile->key, dockey, ile->keylen);
+        memcpy(ile->value, &_offset, sizeof(_offset));
+        list_push_back(&entries, &ile->le);
+    }
+    hbtrie_init_and_load(&trie, 8, 8, blocksize, BLK_NOT_FOUND,
+                         (void*)&bhandle, btreeblk_get_ops(),
+                         (void*)&dhandle, _readkey_wrap,
+                         8,
+                         initial_load_next, initial_load_get, initial_btreeblk_end,
+                         &entries);
+
+    filemgr_commit(file, true, NULL);
+    DBG("trie root bid %" _F64 "\n", trie.root_bid);
+
+    for (size_t ii = 0; ii < 8; ++ii) {
+        sprintf(meta, "metadata_%03zu", ii);
+        sprintf(body, "body_%03zu", ii);
+
+        uint8_t valuebuf[8];
+        r = hbtrie_find(&trie, (void*)dockey, 16 + ii, (void*)valuebuf);
+        btreeblk_end(&bhandle);
+        TEST_CHK(r != HBTRIE_RESULT_FAIL);
+
+        if (r != HBTRIE_RESULT_FAIL) {
+            memcpy(&_offset, valuebuf, 8);
+            _offset = _endian_decode(_offset);
+            docio_read_doc(&dhandle, _offset, &doc, true);
+
+            TEST_CHK(!memcmp(doc.key, dockey, doc.length.keylen));
+            TEST_CHK(!memcmp(doc.meta, meta, doc.length.metalen));
+            TEST_CHK(!memcmp(doc.body, body, doc.length.bodylen));
+        }
+    }
+
+    hbtrie_free(&trie);
+    docio_free(&dhandle);
+    btreeblk_free(&bhandle);
+
+    filemgr_close(file, true, NULL, NULL);
+    filemgr_shutdown();
+
+    struct list_elem* le = list_begin(&entries);
+    while (le) {
+        struct initial_load_elem* ile =
+            _get_entry(le, struct initial_load_elem, le);
+        le = list_next(le);
+        free(ile->key);
+        free(ile);
+    }
+
+    TEST_RESULT("initial load with tailing null test");
 }
 
 int main(){
@@ -1000,6 +1510,10 @@ int main(){
     hbtrie_partial_update_test();
     iterator_start_key_greater_than_prefix_test();
     //large_test();
+    initial_load_test_single_common_prefix();
+    initial_load_test_nested_common_prefix();
+    initial_load_test_tailing_null();
+    initial_load_test_incremental_prefix();
 
     return 0;
 }

@@ -123,6 +123,9 @@ fdb_config get_default_config(void) {
     // Disable read-ahead by default.
     fconfig.num_blocks_readahead = 0;
 
+    // Disable bottom-up build by default.
+    fconfig.bottom_up_index_build = false;
+
     return fconfig;
 }
 
