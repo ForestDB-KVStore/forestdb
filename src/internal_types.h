@@ -307,6 +307,7 @@ struct _fdb_kvs_handle {
         dirty_updates = kv_handle.dirty_updates;
         node = kv_handle.node;
         num_iterators = kv_handle.num_iterators;
+        bottom_up_build_entries = kv_handle.bottom_up_build_entries;
         return *this;
     }
 
@@ -432,6 +433,24 @@ struct _fdb_kvs_handle {
      * Number of active iterator instances created from this handle
      */
     uint32_t num_iterators;
+    /**
+     * Used when `bottom_up_index_build` is `true`.
+     * Instead of inserting into the WAL, it keeps <key, seqnum, offset> tuples
+     * to build the index.
+     */
+    struct list* bottom_up_build_entries;
+    /**
+     * The number of entries in `bottom_up_build_entries`.
+     */
+    uint64_t num_bottom_up_build_entries;
+};
+
+struct bottom_up_build_entry {
+    struct list_elem le;
+    void* key;
+    size_t keylen;
+    uint64_t offset;
+    uint64_t seqnum;
 };
 
 struct hbtrie_iterator;

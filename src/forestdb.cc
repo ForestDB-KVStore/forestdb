@@ -2284,6 +2284,14 @@ fdb_status _fdb_open(fdb_kvs_handle *handle,
         }
     }
 
+    if (config->bottom_up_index_build) {
+        handle->bottom_up_build_entries = (struct list*)malloc(sizeof(struct list));
+        list_init(handle->bottom_up_build_entries);
+        handle->num_bottom_up_build_entries = 0;
+    } else {
+        handle->bottom_up_build_entries = NULL;
+    }
+
     return status;
 }
 
@@ -4250,29 +4258,47 @@ fdb_set_start:
     if (!txn) {
         txn = &file->global_txn;
     }
-    if (handle->kvs) {
-        // multi KV instance mode
-        fdb_doc kv_ins_doc = *doc;
-        kv_ins_doc.key = _doc.key;
-        kv_ins_doc.keylen = _doc.length.keylen;
-        if (!immediate_remove) {
-            wal_insert(txn, file, &cmp_info, &kv_ins_doc, offset,
-                       WAL_INS_WRITER);
-        } else {
-            wal_immediate_remove(txn, file, &cmp_info, &kv_ins_doc, offset,
-                                 WAL_INS_WRITER);
-        }
-    } else {
-        if (!immediate_remove) {
-            wal_insert(txn, file, &cmp_info, doc, offset, WAL_INS_WRITER);
-        } else {
-            wal_immediate_remove(txn, file, &cmp_info, doc, offset,
-                                 WAL_INS_WRITER);
-        }
-    }
 
-    if (wal_get_dirty_status(file)== FDB_WAL_CLEAN) {
-        wal_set_dirty_status(file, FDB_WAL_DIRTY);
+    if (handle->config.bottom_up_index_build) {
+        // Bottom-up build mode, bypass WAL.
+        struct bottom_up_build_entry* bub_entry =
+            (struct bottom_up_build_entry*)
+            malloc(sizeof(struct bottom_up_build_entry));
+        bub_entry->keylen = _doc.length.keylen;
+        bub_entry->key = (void*)malloc(_doc.length.keylen);
+        memcpy(bub_entry->key, _doc.key, _doc.length.keylen);
+        bub_entry->seqnum = doc->seqnum;
+        bub_entry->offset = doc->offset;
+
+        fdb_kvs_handle* root_handle = handle->fhandle->root;
+        list_push_back(root_handle->bottom_up_build_entries, &bub_entry->le);
+        root_handle->num_bottom_up_build_entries++;
+
+    } else {
+        if (handle->kvs) {
+            // multi KV instance mode
+            fdb_doc kv_ins_doc = *doc;
+            kv_ins_doc.key = _doc.key;
+            kv_ins_doc.keylen = _doc.length.keylen;
+            if (!immediate_remove) {
+                wal_insert(txn, file, &cmp_info, &kv_ins_doc, offset,
+                           WAL_INS_WRITER);
+            } else {
+                wal_immediate_remove(txn, file, &cmp_info, &kv_ins_doc, offset,
+                                     WAL_INS_WRITER);
+            }
+        } else {
+            if (!immediate_remove) {
+                wal_insert(txn, file, &cmp_info, doc, offset, WAL_INS_WRITER);
+            } else {
+                wal_immediate_remove(txn, file, &cmp_info, doc, offset,
+                                     WAL_INS_WRITER);
+            }
+        }
+
+        if (wal_get_dirty_status(file)== FDB_WAL_CLEAN) {
+            wal_set_dirty_status(file, FDB_WAL_DIRTY);
+        }
     }
 
     if (handle->config.auto_commit &&
@@ -4648,11 +4674,11 @@ fdb_status fdb_commit_non_durable(fdb_file_handle *fhandle,
 
 void* _fdb_bottom_up_index_build_next(void* cur_entry, void* aux) {
     if (!cur_entry) {
-        struct avl_tree* tree = (struct avl_tree*)aux;
-        return avl_first(tree);
+        struct list* ll = (struct list*)aux;
+        return list_begin(ll);
     }
-    struct avl_node* an = (struct avl_node*)cur_entry;
-    return avl_next(an);
+    struct list_elem* le = (struct list_elem*)cur_entry;
+    return list_next(le);
 }
 
 void _fdb_bottom_up_index_build_get(void* cur_entry,
@@ -4661,15 +4687,13 @@ void _fdb_bottom_up_index_build_get(void* cur_entry,
                                     void** value_out,
                                     void* aux)
 {
-    struct wal_item_header* header =
-        _get_entry(cur_entry, struct wal_item_header, avl_key);
-    *key_out = header->key;
-    *keylen_out = header->keylen;
+    struct bottom_up_build_entry* entry =
+        _get_entry(cur_entry, struct bottom_up_build_entry, le);
+    *key_out = entry->key;
+    *keylen_out = entry->keylen;
 
     thread_local uint64_t enc_bid;
-    struct list_elem* le = list_begin(&header->items);
-    struct wal_item* first_item = _get_entry(le, struct wal_item, list_elem);
-    enc_bid = _endian_encode(first_item->offset);
+    enc_bid = _endian_encode(entry->offset);
     *value_out = &enc_bid;
 }
 
@@ -4683,15 +4707,15 @@ void _fdb_bottom_up_index_build_get_seq(void* cur_entry,
                                         void** value_out,
                                         void* aux)
 {
-    struct wal_item* elem =
-        _get_entry(cur_entry, struct wal_item, avl_seq);
+    struct bottom_up_build_entry* entry =
+        _get_entry(cur_entry, struct bottom_up_build_entry, le);
     thread_local uint64_t enc_seq;
-    enc_seq = _endian_encode(elem->seqnum);
+    enc_seq = _endian_encode(entry->seqnum);
     *key_out = &enc_seq;
     *keylen_out = sizeof(enc_seq);
 
     thread_local uint64_t enc_bid;
-    enc_bid = _endian_encode(elem->offset);
+    enc_bid = _endian_encode(entry->offset);
     *value_out = &enc_bid;
 }
 
@@ -4699,11 +4723,7 @@ fdb_status _fdb_bottom_up_index_build(fdb_kvs_handle *handle)
 {
     fdb_status fs = FDB_RESULT_SUCCESS;
 
-    uint64_t num_entries = handle->file->wal->num_flushable;
-    struct avl_tree* avl_key = &handle->file->wal->key_shards[0]._map;
-    struct avl_tree* avl_seq =
-        handle->file->wal->seq_shards
-        ? &handle->file->wal->seq_shards[0]._map : NULL;
+    uint64_t num_entries = handle->num_bottom_up_build_entries;
 
     // Build key-index first (tree is sorted by key).
     struct hbtrie new_key_trie;
@@ -4717,7 +4737,7 @@ fdb_status _fdb_bottom_up_index_build(fdb_kvs_handle *handle)
                          _fdb_bottom_up_index_build_next,
                          _fdb_bottom_up_index_build_get,
                          _fdb_bottom_up_index_btreeblk_end,
-                         avl_key);
+                         handle->bottom_up_build_entries);
     handle->trie->root_bid = new_key_trie.root_bid;
 
     // Build seq-index next.
@@ -4733,7 +4753,7 @@ fdb_status _fdb_bottom_up_index_build(fdb_kvs_handle *handle)
                              _fdb_bottom_up_index_build_next,
                              _fdb_bottom_up_index_build_get_seq,
                              _fdb_bottom_up_index_btreeblk_end,
-                             avl_seq);
+                             handle->bottom_up_build_entries);
         handle->seqtrie->root_bid = new_seq_trie.root_bid;
     } else if (handle->seqtree) {
         // Not supported yet.
@@ -4842,33 +4862,35 @@ fdb_commit_start:
         //    (in this case, flush the rest of entries)
         // 3. user forces to manually flush wal
 
-        struct filemgr_dirty_update_node *prev_node = NULL, *new_node = NULL;
-
-        _fdb_dirty_update_ready(handle, &prev_node, &new_node,
-                                &dirty_idtree_root, &dirty_seqtree_root, false);
-
-        wr = wal_flush(handle->file, (void *)handle,
-                       _fdb_wal_flush_func, _fdb_wal_get_old_offset,
-                       _fdb_wal_flush_seq_purge, _fdb_wal_flush_kvs_delta_stats,
-                       &flush_items);
-
         if (handle->config.bottom_up_index_build) {
             _fdb_bottom_up_index_build(handle);
-        }
 
-        if (wr != FDB_RESULT_SUCCESS) {
-            btreeblk_clear_dirty_update(handle->bhandle);
-            filemgr_dirty_update_close_node(handle->file, prev_node);
-            filemgr_dirty_update_remove_node(handle->file, new_node);
-            filemgr_mutex_unlock(handle->file);
-            atomic_cas_uint8_t(&handle->handle_busy, 1, 0);
-            return wr;
-        }
-        wal_set_dirty_status(handle->file, FDB_WAL_CLEAN);
-        wal_flushed = true;
+        } else {
+            struct filemgr_dirty_update_node *prev_node = NULL, *new_node = NULL;
 
-        _fdb_dirty_update_finalize(handle, prev_node, new_node,
-                                   &dirty_idtree_root, &dirty_seqtree_root, true);
+            _fdb_dirty_update_ready(handle, &prev_node, &new_node,
+                                    &dirty_idtree_root, &dirty_seqtree_root, false);
+
+            wr = wal_flush(handle->file, (void *)handle,
+                           _fdb_wal_flush_func, _fdb_wal_get_old_offset,
+                           _fdb_wal_flush_seq_purge, _fdb_wal_flush_kvs_delta_stats,
+                           &flush_items);
+
+
+            if (wr != FDB_RESULT_SUCCESS) {
+                btreeblk_clear_dirty_update(handle->bhandle);
+                filemgr_dirty_update_close_node(handle->file, prev_node);
+                filemgr_dirty_update_remove_node(handle->file, new_node);
+                filemgr_mutex_unlock(handle->file);
+                atomic_cas_uint8_t(&handle->handle_busy, 1, 0);
+                return wr;
+            }
+            wal_set_dirty_status(handle->file, FDB_WAL_CLEAN);
+            wal_flushed = true;
+
+            _fdb_dirty_update_finalize(handle, prev_node, new_node,
+                                       &dirty_idtree_root, &dirty_seqtree_root, true);
+        }
     }
 
     // Note: Appending KVS header must be done after flushing WAL
@@ -8182,6 +8204,21 @@ fdb_status _fdb_close_root(fdb_kvs_handle *handle)
     return fs;
 }
 
+void _destroy_bottom_up_build_entries(fdb_kvs_handle* handle) {
+    if (!handle->bottom_up_build_entries) {
+        return;
+    }
+    struct list_elem* le = list_begin(handle->bottom_up_build_entries);
+    while (le) {
+        struct bottom_up_build_entry* entry =
+            _get_entry(le, struct bottom_up_build_entry, le);
+        le = list_next(le);
+        free(entry->key);
+        free(entry);
+    }
+    free(handle->bottom_up_build_entries);
+}
+
 fdb_status _fdb_close(fdb_kvs_handle *handle)
 {
     fdb_status fs;
@@ -8234,6 +8271,8 @@ fdb_status _fdb_close(fdb_kvs_handle *handle)
         free(handle->filename);
         handle->filename = NULL;
     }
+
+    _destroy_bottom_up_build_entries(handle);
 
     return fs;
 }

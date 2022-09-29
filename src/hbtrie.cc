@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "btreeblock.h"
 #include "option.h"
 #include "forestdb_endian.h"
 #include "hbtrie.h"
@@ -2495,6 +2496,10 @@ int _building_btree_next_kv(void** key_out, void** val_out, void* aux) {
     return 0;
 }
 
+void _building_btree_write_done(void* voidhandle, bid_t bid, void* aux) {
+    btreeblk_write_done(voidhandle, bid);
+}
+
 bid_t _hbtrie_load_recursive(struct hbtrie *trie,
                              int cur_chunk_idx,
                              int cp_start_chunk_idx,
@@ -2699,6 +2704,7 @@ bid_t _hbtrie_load_recursive(struct hbtrie *trie,
                              &meta,
                              num_entries,
                              _building_btree_next_kv,
+                             _building_btree_write_done,
                              &params );
         do_btreeblk_end(trie->btreeblk_handle);
         ret_bid = btree.root_bid;
