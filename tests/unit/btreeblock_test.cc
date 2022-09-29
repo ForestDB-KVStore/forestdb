@@ -752,7 +752,7 @@ void btree_reverse_iterator_test()
     TEST_RESULT("btree reverse iterator test");
 }
 
-int btree_load_next_kv(void** key_out, void** val_out, void* aux) {
+int load_test_next_kv(void** key_out, void** val_out, void* aux) {
     uint64_t* idx = (uint64_t*)aux;
     static char kk[16];
     static char vv[16];
@@ -762,6 +762,10 @@ int btree_load_next_kv(void** key_out, void** val_out, void* aux) {
     *key_out = (void*)kk;
     *val_out = (void*)vv;
     return 0;
+}
+
+void load_test_write_done(void* voidhandle, bid_t bid, void* aux) {
+    btreeblk_write_done(voidhandle, bid);
 }
 
 #include <sys/time.h>
@@ -804,7 +808,7 @@ void btree_initial_load_test(uint64_t num_entries)
     btree_init_and_load(&btree, (void*)&bhandle,
                         btreeblk_get_ops(), kv_ops,
                         nodesize, ksize, vsize, 0x0, NULL,
-                        num_entries, btree_load_next_kv, &idx);
+                        num_entries, load_test_next_kv, load_test_write_done, &idx);
     btreeblk_end(&bhandle);
 #else
     btree_init(&btree, (void*)&bhandle,

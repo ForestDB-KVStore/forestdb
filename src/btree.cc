@@ -1705,6 +1705,7 @@ btree_result btree_init_and_load(
         struct btree_meta *meta,
         uint64_t num_keys,
         btree_load_get_next_kv* next_kv,
+        btree_load_write_done* write_done,
         void* aux)
 {
     void *addr;
@@ -1830,6 +1831,7 @@ btree_result btree_init_and_load(
             } else {
                 if (cur_node[jj]->nentry >= max_num_entries_non_root) {
                     // Otherwise: full, should allocate a new one.
+                    write_done(btree->blk_handle, node_bids[jj], aux);
                     cur_node[jj] = NULL;
                     node_bids[jj] = 0;
                 }

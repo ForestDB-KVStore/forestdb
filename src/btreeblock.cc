@@ -945,6 +945,38 @@ fdb_status btreeblk_operation_end(void *voidhandle)
     return status;
 }
 
+void btreeblk_write_done(void* voidhandle, bid_t bid) {
+    // flush and write the block for given BID in the allocation list.
+    struct btreeblk_handle *handle = (struct btreeblk_handle *)voidhandle;
+
+    // write and free items in allocation list
+    struct list_elem *e = list_begin(&handle->alc_list);
+    while (e) {
+        struct btreeblk_block *block = _get_entry(e, struct btreeblk_block, le);
+        if (block->bid != bid) {
+            e = list_next(e);
+            continue;
+        }
+        int writable = filemgr_is_writable(handle->file, block->bid);
+        if (writable) {
+            fdb_status status = _btreeblk_write_dirty_block(handle, block);
+            if (status != FDB_RESULT_SUCCESS) {
+                return;
+            }
+        } else {
+            fdb_log(nullptr, FDB_LOG_FATAL,
+                    FDB_RESULT_WRITE_FAIL,
+                    "b+tree node write fail, BID %zu, file %s",
+                    block->bid,
+                    handle->file->filename);
+            return;
+        }
+
+        e = list_remove(&handle->alc_list, &block->le);
+        _btreeblk_free_dirty_block(handle, block);
+    }
+}
+
 void btreeblk_discard_blocks(struct btreeblk_handle *handle)
 {
     // discard all writable blocks in the read list
