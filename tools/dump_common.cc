@@ -144,7 +144,7 @@ void print_header(fdb_kvs_handle *db)
             datasize_wal = wal_get_datasize(db->file);
 
             printf("    # documents in the main index: %" _F64
-                   ", %" _F64 "deleted / "
+                   ", %" _F64 " deleted / "
                    "in WAL: %" _F64 " (insert), %" _F64 " (remove)\n",
                    ndocs, ndeletes, ndocs_wal_inserted, ndocs_wal_deleted);
             printf("    # live index nodes: %" _F64 " (%" _F64 " bytes)\n",
@@ -188,7 +188,7 @@ void print_header(fdb_kvs_handle *db)
                 }
 
                 printf("      # documents in the main index: %" _F64
-                       ", %" _F64 "deleted / "
+                       ", %" _F64 " deleted / "
                        "in WAL: %" _F64 " (insert), %" _F64 " (remove)\n",
                        ndocs, ndeletes, ndocs_wal_inserted, ndocs_wal_deleted);
                 printf("      # live index nodes: %" _F64 " (%" _F64 " bytes)\n",

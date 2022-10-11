@@ -2288,6 +2288,7 @@ fdb_status _fdb_open(fdb_kvs_handle *handle,
         handle->bottom_up_build_entries = (struct list*)malloc(sizeof(struct list));
         list_init(handle->bottom_up_build_entries);
         handle->num_bottom_up_build_entries = 0;
+        handle->space_used_for_bottom_up_build = 0;
     } else {
         handle->bottom_up_build_entries = NULL;
     }
@@ -4273,6 +4274,7 @@ fdb_set_start:
         fdb_kvs_handle* root_handle = handle->fhandle->root;
         list_push_back(root_handle->bottom_up_build_entries, &bub_entry->le);
         root_handle->num_bottom_up_build_entries++;
+        root_handle->space_used_for_bottom_up_build += doc->size_ondisk;
 
     } else {
         if (handle->kvs) {
@@ -4763,7 +4765,7 @@ fdb_status _fdb_bottom_up_index_build(fdb_kvs_handle *handle)
     struct kvs_stat stat_dst;
     stat_dst.ndocs = num_entries;
     stat_dst.ndeletes = 0;
-    stat_dst.datasize = handle->file->wal->datasize;
+    stat_dst.datasize = handle->space_used_for_bottom_up_build;
     stat_dst.nlivenodes = handle->bhandle->nlivenodes;
     stat_dst.deltasize = 0;
     _kvs_stat_set(handle->file, 0, stat_dst);
@@ -8392,6 +8394,10 @@ size_t fdb_estimate_space_used(fdb_file_handle *fhandle)
     ret = datasize;
     ret += nlivenodes * handle->config.blocksize;
     ret += wal_get_datasize(handle->file);
+
+    if (handle->config.bottom_up_index_build) {
+        ret += handle->fhandle->root->space_used_for_bottom_up_build;
+    }
 
     return ret;
 }

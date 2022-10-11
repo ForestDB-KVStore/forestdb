@@ -443,6 +443,10 @@ struct _fdb_kvs_handle {
      * The number of entries in `bottom_up_build_entries`.
      */
     uint64_t num_bottom_up_build_entries;
+    /**
+     * The amount of data appended in bottom-up mode.
+     */
+    uint64_t space_used_for_bottom_up_build;
 };
 
 struct bottom_up_build_entry {
