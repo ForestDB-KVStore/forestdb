@@ -5253,6 +5253,9 @@ void bottom_up_build_test()
         s = fdb_set_kv(default_db, key, strlen(key), value, value_len);
         TEST_CHK(s == FDB_RESULT_SUCCESS);
     }
+    size_t space_used = fdb_estimate_space_used(dbfile);
+    TEST_CHK(space_used > 0);
+
     s = fdb_commit(dbfile, FDB_COMMIT_MANUAL_WAL_FLUSH);
 
     s = fdb_kvs_close(default_db);
