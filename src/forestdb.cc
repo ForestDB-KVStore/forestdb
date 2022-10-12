@@ -4741,6 +4741,7 @@ fdb_status _fdb_bottom_up_index_build(fdb_kvs_handle *handle)
                          _fdb_bottom_up_index_btreeblk_end,
                          handle->bottom_up_build_entries);
     handle->trie->root_bid = new_key_trie.root_bid;
+    hbtrie_free(&new_key_trie);
 
     // Build seq-index next.
     if (handle->seqtrie) {
@@ -4757,6 +4758,7 @@ fdb_status _fdb_bottom_up_index_build(fdb_kvs_handle *handle)
                              _fdb_bottom_up_index_btreeblk_end,
                              handle->bottom_up_build_entries);
         handle->seqtrie->root_bid = new_seq_trie.root_bid;
+        hbtrie_free(&new_seq_trie);
     } else if (handle->seqtree) {
         // Not supported yet.
     }
