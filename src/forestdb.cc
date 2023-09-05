@@ -2759,12 +2759,18 @@ INLINE fdb_status _fdb_wal_flush_func(void *voidhandle,
 
             // Avoid duplicates (remove previous sequence number)
             if (handle->config.seqtree_opt == FDB_SEQTREE_USE) {
-                struct wal_stale_seq_entry *entry = (struct wal_stale_seq_entry *)
-                    calloc(1, sizeof(struct wal_stale_seq_entry));
-                entry->kv_id = kv_id;
-                entry->seqnum = _doc.seqnum;
-                avl_insert(stale_seqnum_list, &entry->avl_entry,
-                           _fdb_seq_entry_cmp);
+                // WARNING:
+                //   Do this only when the previous sequence number is different
+                //   from the new one. If they are the same, we should not remove it
+                //   as that makes the document unreachable from seq index.
+                if (_doc.seqnum != item->seqnum) {
+                    struct wal_stale_seq_entry *entry = (struct wal_stale_seq_entry *)
+                        calloc(1, sizeof(struct wal_stale_seq_entry));
+                    entry->kv_id = kv_id;
+                    entry->seqnum = _doc.seqnum;
+                    avl_insert(stale_seqnum_list, &entry->avl_entry,
+                               _fdb_seq_entry_cmp);
+                }
             }
         }
     } else {
