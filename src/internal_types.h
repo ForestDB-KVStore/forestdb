@@ -269,6 +269,25 @@ struct _fdb_key_cmp_info {
     struct kvs_info *kvs;
 };
 
+struct bottom_up_build_ctx {
+    /**
+     * List of <key, seqnum, offset> tuples to build the index.
+     */
+    struct list* entries;
+    /**
+     * Number of entries in `entries`.
+     */
+    uint64_t num_entries;
+    /**
+     * Amount of data appended in bottom-up mode.
+     */
+    uint64_t space_used;
+    /**
+     * ForestDB KV store handle.
+     */
+    fdb_kvs_handle *handle;
+};
+
 /**
  * ForestDB KV store handle definition.
  */
@@ -307,7 +326,7 @@ struct _fdb_kvs_handle {
         dirty_updates = kv_handle.dirty_updates;
         node = kv_handle.node;
         num_iterators = kv_handle.num_iterators;
-        bottom_up_build_entries = kv_handle.bottom_up_build_entries;
+        bub_ctx = kv_handle.bub_ctx;
         return *this;
     }
 
@@ -435,18 +454,8 @@ struct _fdb_kvs_handle {
     uint32_t num_iterators;
     /**
      * Used when `bottom_up_index_build` is `true`.
-     * Instead of inserting into the WAL, it keeps <key, seqnum, offset> tuples
-     * to build the index.
      */
-    struct list* bottom_up_build_entries;
-    /**
-     * The number of entries in `bottom_up_build_entries`.
-     */
-    uint64_t num_bottom_up_build_entries;
-    /**
-     * The amount of data appended in bottom-up mode.
-     */
-    uint64_t space_used_for_bottom_up_build;
+    struct bottom_up_build_ctx bub_ctx;
 };
 
 struct bottom_up_build_entry {

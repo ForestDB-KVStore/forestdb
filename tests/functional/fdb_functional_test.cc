@@ -5281,6 +5281,21 @@ void bottom_up_build_test()
         TEST_CHK( memcmp(value, value_out, valuelen_out) == 0 );
     }
 
+    // Search by seq-iterator from the middle.
+    fdb_iterator* itr = NULL;
+    s = fdb_iterator_sequence_init(default_db, &itr, 50, 100, FDB_ITR_NONE);
+    TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+    fdb_seqnum_t seqnum_cnt = 50;
+    do {
+        fdb_doc* doc = NULL;
+        s = fdb_iterator_get(itr, &doc);
+        if (s != FDB_RESULT_SUCCESS) break;
+        TEST_CHK(doc->seqnum == seqnum_cnt);
+        seqnum_cnt++;
+        fdb_doc_free(doc);
+    } while (fdb_iterator_next(itr) == FDB_RESULT_SUCCESS);
+
     s = fdb_kvs_close(default_db);
     TEST_CHK(s == FDB_RESULT_SUCCESS);
 

@@ -2285,13 +2285,14 @@ fdb_status _fdb_open(fdb_kvs_handle *handle,
     }
 
     if (config->bottom_up_index_build) {
-        handle->bottom_up_build_entries = (struct list*)malloc(sizeof(struct list));
-        list_init(handle->bottom_up_build_entries);
-        handle->num_bottom_up_build_entries = 0;
-        handle->space_used_for_bottom_up_build = 0;
+        handle->bub_ctx.entries = (struct list*)malloc(sizeof(struct list));
+        list_init(handle->bub_ctx.entries);
     } else {
-        handle->bottom_up_build_entries = NULL;
+        handle->bub_ctx.entries = NULL;
     }
+    handle->bub_ctx.handle = handle;
+    handle->bub_ctx.num_entries = 0;
+    handle->bub_ctx.space_used = 0;
 
     return status;
 }
@@ -4278,9 +4279,9 @@ fdb_set_start:
         bub_entry->offset = doc->offset;
 
         fdb_kvs_handle* root_handle = handle->fhandle->root;
-        list_push_back(root_handle->bottom_up_build_entries, &bub_entry->le);
-        root_handle->num_bottom_up_build_entries++;
-        root_handle->space_used_for_bottom_up_build += doc->size_ondisk;
+        list_push_back(root_handle->bub_ctx.entries, &bub_entry->le);
+        root_handle->bub_ctx.num_entries++;
+        root_handle->bub_ctx.space_used += doc->size_ondisk;
 
     } else {
         if (handle->kvs) {
@@ -4682,8 +4683,8 @@ fdb_status fdb_commit_non_durable(fdb_file_handle *fhandle,
 
 void* _fdb_bottom_up_index_build_next(void* cur_entry, void* aux) {
     if (!cur_entry) {
-        struct list* ll = (struct list*)aux;
-        return list_begin(ll);
+        struct bottom_up_build_ctx* bub_ctx = (struct bottom_up_build_ctx*)aux;
+        return list_begin(bub_ctx->entries);
     }
     struct list_elem* le = (struct list_elem*)cur_entry;
     return list_next(le);
@@ -4717,10 +4718,29 @@ void _fdb_bottom_up_index_build_get_seq(void* cur_entry,
 {
     struct bottom_up_build_entry* entry =
         _get_entry(cur_entry, struct bottom_up_build_entry, le);
-    thread_local uint64_t enc_seq;
-    enc_seq = _endian_encode(entry->seqnum);
-    *key_out = &enc_seq;
-    *keylen_out = sizeof(enc_seq);
+
+    thread_local std::vector<uint8_t> seq_buf(16);
+
+    struct bottom_up_build_ctx* bub_ctx = (struct bottom_up_build_ctx*)aux;
+    size_t offset = 0;
+    if (bub_ctx->handle->kvs) {
+        size_t chunk_size = bub_ctx->handle->config.chunksize;
+        if (chunk_size + sizeof(entry->seqnum) > seq_buf.size()) {
+            seq_buf.resize(chunk_size + sizeof(entry->seqnum));
+        }
+
+        if (entry->keylen >= chunk_size) {
+            memcpy(&seq_buf[0], entry->key, chunk_size);
+        } else {
+            memset(&seq_buf[0], 0, chunk_size);
+        }
+        offset += chunk_size;
+    }
+
+    uint64_t enc_seq = _endian_encode(entry->seqnum);
+    memcpy(&seq_buf[offset], &enc_seq, sizeof(enc_seq));
+    *key_out = &seq_buf[0];
+    *keylen_out = offset + sizeof(enc_seq);
 
     thread_local uint64_t enc_bid;
     enc_bid = _endian_encode(entry->offset);
@@ -4731,7 +4751,7 @@ fdb_status _fdb_bottom_up_index_build(fdb_kvs_handle *handle)
 {
     fdb_status fs = FDB_RESULT_SUCCESS;
 
-    uint64_t num_entries = handle->num_bottom_up_build_entries;
+    uint64_t num_entries = handle->bub_ctx.num_entries;
 
     // Build key-index first (tree is sorted by key).
     struct hbtrie new_key_trie;
@@ -4745,7 +4765,7 @@ fdb_status _fdb_bottom_up_index_build(fdb_kvs_handle *handle)
                          _fdb_bottom_up_index_build_next,
                          _fdb_bottom_up_index_build_get,
                          _fdb_bottom_up_index_btreeblk_end,
-                         handle->bottom_up_build_entries);
+                         &handle->bub_ctx);
     handle->trie->root_bid = new_key_trie.root_bid;
     hbtrie_free(&new_key_trie);
 
@@ -4762,7 +4782,7 @@ fdb_status _fdb_bottom_up_index_build(fdb_kvs_handle *handle)
                              _fdb_bottom_up_index_build_next,
                              _fdb_bottom_up_index_build_get_seq,
                              _fdb_bottom_up_index_btreeblk_end,
-                             handle->bottom_up_build_entries);
+                             &handle->bub_ctx);
         handle->seqtrie->root_bid = new_seq_trie.root_bid;
         hbtrie_free(&new_seq_trie);
     } else if (handle->seqtree) {
@@ -4773,7 +4793,7 @@ fdb_status _fdb_bottom_up_index_build(fdb_kvs_handle *handle)
     struct kvs_stat stat_dst;
     stat_dst.ndocs = num_entries;
     stat_dst.ndeletes = 0;
-    stat_dst.datasize = handle->space_used_for_bottom_up_build;
+    stat_dst.datasize = handle->bub_ctx.space_used;
     stat_dst.nlivenodes = handle->bhandle->nlivenodes;
     stat_dst.deltasize = 0;
     _kvs_stat_set(handle->file, 0, stat_dst);
@@ -8215,10 +8235,10 @@ fdb_status _fdb_close_root(fdb_kvs_handle *handle)
 }
 
 void _destroy_bottom_up_build_entries(fdb_kvs_handle* handle) {
-    if (!handle->bottom_up_build_entries) {
+    if (!handle->bub_ctx.entries) {
         return;
     }
-    struct list_elem* le = list_begin(handle->bottom_up_build_entries);
+    struct list_elem* le = list_begin(handle->bub_ctx.entries);
     while (le) {
         struct bottom_up_build_entry* entry =
             _get_entry(le, struct bottom_up_build_entry, le);
@@ -8226,7 +8246,7 @@ void _destroy_bottom_up_build_entries(fdb_kvs_handle* handle) {
         free(entry->key);
         free(entry);
     }
-    free(handle->bottom_up_build_entries);
+    free(handle->bub_ctx.entries);
 }
 
 fdb_status _fdb_close(fdb_kvs_handle *handle)
@@ -8404,7 +8424,7 @@ size_t fdb_estimate_space_used(fdb_file_handle *fhandle)
     ret += wal_get_datasize(handle->file);
 
     if (handle->config.bottom_up_index_build) {
-        ret += handle->fhandle->root->space_used_for_bottom_up_build;
+        ret += handle->fhandle->root->bub_ctx.space_used;
     }
 
     return ret;
