@@ -5206,6 +5206,118 @@ void get_nearest_test()
     TEST_RESULT("get nearest test");
 }
 
+void get_nearest_with_deletion_test()
+{
+
+    TEST_INIT();
+    int r;
+    fdb_status s; (void)s;
+
+    memleak_start();
+
+    // remove previous dummy files
+    r = system(SHELL_DEL" dummy* > errorlog.txt");
+    (void)r;
+
+    fdb_config config = fdb_get_default_config();
+    config.do_not_search_wal = true;
+
+    fdb_kvs_config kvs_config = fdb_get_default_kvs_config();
+
+    // create a file
+    fdb_file_handle *dbfile;
+    s = fdb_open(&dbfile, "dummy", &config);
+    TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+    fdb_kvs_handle *default_db;
+    s = fdb_kvs_open(dbfile, &default_db, NULL, &kvs_config);
+    TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+    char key[256];
+    char keystr[] = "key%06d";
+    char valuestr[] = "value%08d";
+
+    size_t value_len = 32;
+    char* value = (char*)malloc(value_len);
+    memset(value, 'x', value_len);
+    memcpy(value + value_len - 6, "<end>", 6);
+
+    // Put keys.
+    const int NUM = 100;
+    for (size_t i=0; i<NUM;++i){
+        sprintf(key, keystr, i*10);
+        sprintf(value, valuestr, i);
+        s = fdb_set_kv(default_db, key, strlen(key), value, value_len);
+        TEST_CHK(s == FDB_RESULT_SUCCESS);
+    }
+    s = fdb_commit(dbfile, FDB_COMMIT_MANUAL_WAL_FLUSH);
+
+    // Delete even number keys.
+    for (size_t i=0; i<NUM; i+= 2){
+        sprintf(key, keystr, i*10);
+        sprintf(value, valuestr, i);
+        s = fdb_del_kv(default_db, key, strlen(key));
+        TEST_CHK(s == FDB_RESULT_SUCCESS);
+    }
+    s = fdb_commit(dbfile, FDB_COMMIT_MANUAL_WAL_FLUSH);
+
+    for (int IDX = 0; IDX < NUM; IDX++) {
+        fdb_doc *doc;
+        sprintf(key, keystr, IDX*10);
+        fdb_doc_create(&doc, NULL, 0, NULL, 0, NULL, 0);
+        s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_GREATER);
+        if (IDX == NUM - 1) {
+            TEST_CHK(s != FDB_RESULT_SUCCESS);
+
+        } else {
+            TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+            // Even though the exact match exists, should be greater key.
+            // And that should be non-deleted one (odd number).
+            int exp = ((IDX + 1) / 2) * 2 + 1;
+            sprintf(key, keystr, exp * 10);
+            sprintf(value, valuestr, exp);
+            TEST_CMP(key, doc->key, strlen(key));
+            TEST_CMP(value, doc->body, value_len);
+        }
+
+        fdb_doc_free(doc);
+    }
+
+    for (int IDX = 0; IDX < NUM; IDX++) {
+        fdb_doc *doc;
+        sprintf(key, keystr, IDX*10);
+        fdb_doc_create(&doc, NULL, 0, NULL, 0, NULL, 0);
+        s = fdb_get_nearest(default_db, key, strlen(key), doc, FDB_GET_SMALLER);
+        if (IDX <= 1) {
+            TEST_CHK(s != FDB_RESULT_SUCCESS);
+
+        } else {
+            TEST_CHK(s == FDB_RESULT_SUCCESS);
+            // Even though the exact match exists, should be smaller key.
+            int exp = (IDX / 2) * 2 - 1;
+            sprintf(key, keystr, exp * 10);
+            sprintf(value, valuestr, exp);
+            TEST_CMP(key, doc->key, strlen(key));
+            TEST_CMP(value, doc->body, value_len);
+
+        }
+
+        fdb_doc_free(doc);
+    }
+
+    s = fdb_kvs_close(default_db);
+    TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+    s = fdb_close(dbfile);
+    TEST_CHK(s == FDB_RESULT_SUCCESS);
+
+    s = fdb_shutdown();
+    memleak_end();
+
+    TEST_RESULT("get nearest test");
+}
+
 void bottom_up_build_test()
 {
     TEST_INIT();
@@ -5366,6 +5478,7 @@ int main(){
     multi_thread_test(40*1024, 1024, 20, 1, 100, 2, 6);
     apis_with_invalid_handles_test();
     get_nearest_test();
+    get_nearest_with_deletion_test();
     bottom_up_build_test();
     return 0;
 }
