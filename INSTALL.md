@@ -155,3 +155,14 @@ To run all the unit tests:
      `git clone https://github.com/couchbase/platform.git`
 
      `Follow the rest of the platform specific build instructions from above`
+
+
+
+Alternative build method - with Conan
+----------
+1. Install conan using one of the methods desribed here: https://conan.io/downloads
+1. `conan build .` - builds Release configuration
+1. `conan build . -s build_type=Debug` builds an alternative configuration supported by CMake
+1. You can control supported build options via command line as well, ex:
+    `conan build . -o build_tests=True`
+**NOTE**: this conan recipe supports conan **editable** mode which make it convenient to embedd this library in other projects built with conan
