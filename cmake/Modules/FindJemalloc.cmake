@@ -1,35 +1,35 @@
 # Locate jemalloc libraries on a host OS.
 
-IF (UNIX)
-    FIND_PATH(JEMALLOC_INCLUDE_DIR jemalloc/jemalloc.h
-              PATH_SUFFIXES include
-              PATHS
-                  ~/Library/Frameworks
-                  /Library/Frameworks
-                  /usr/local
-                  /opt/local
-                  /opt/csw
-                  /opt)
+if(UNIX)
+    find_path(JEMALLOC_INCLUDE_DIR jemalloc/jemalloc.h
+        PATH_SUFFIXES include
+        PATHS
+        ~/Library/Frameworks
+        /Library/Frameworks
+        /usr/local
+        /opt/local
+        /opt/csw
+        /opt)
 
-    FIND_LIBRARY(JEMALLOC_LIBRARIES
-                 NAMES jemalloc
-                 PATHS
-                     ~/Library/Frameworks
-                     /Library/Frameworks
-                     /usr/local
-                     /opt/local
-                     /opt/csw
-                     /opt)
-ELSEIF (WIN32)
-ENDIF()
+    find_library(JEMALLOC_LIBRARIES
+        NAMES jemalloc
+        PATHS
+        ~/Library/Frameworks
+        /Library/Frameworks
+        /usr/local
+        /opt/local
+        /opt/csw
+        /opt)
+elseif(WIN32)
+endif()
 
-IF (JEMALLOC_LIBRARIES)
-    MESSAGE(STATUS "Found jemalloc libraries in ${JEMALLOC_INCLUDE_DIR} :
+if(JEMALLOC_LIBRARIES)
+    message(STATUS "Found jemalloc libraries in ${JEMALLOC_INCLUDE_DIR} :
             ${JEMALLOC_LIBRARIES}")
-    ADD_DEFINITIONS(-D_JEMALLOC=1)
+    add_compile_definitions(HAVE_JEMALLOC=1)
     set(MALLOC_LIBRARIES ${JEMALLOC_LIBRARIES})
     include_directories(AFTER ${JEMALLOC_INCLUDE_DIR})
-    MARK_AS_ADVANCED(MALLOC_INCLUDE_DIR JEMALLOC_LIBRARIES)
-ELSE (JEMALLOC_LIBRARIES)
-    MESSAGE(FATAL_ERROR "Can't find jemalloc libraries")
-ENDIF (JEMALLOC_LIBRARIES)
+    mark_as_advanced(MALLOC_INCLUDE_DIR JEMALLOC_LIBRARIES)
+else()
+    message(FATAL_ERROR "Can't find jemalloc libraries")
+endif(JEMALLOC_LIBRARIES)

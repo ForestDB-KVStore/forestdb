@@ -185,7 +185,7 @@ add_executable(btree_str_kv_test
                ${ROOT_SRC}/avltree.cc
                ${GETTIMEOFDAY_VS}
                ${ROOT_UTILS}/memleak.cc)
-target_link_libraries(btree_str_kv_test  ${LIBM} ${MALLOC_LIBRARIES})
+target_link_libraries(btree_str_kv_test ${PTHREAD_LIB} ${LIBM} ${MALLOC_LIBRARIES})
 
 add_executable(btree_kv_test
                btree_kv_test.cc
@@ -193,7 +193,7 @@ add_executable(btree_kv_test
                ${ROOT_SRC}/avltree.cc
                ${GETTIMEOFDAY_VS}
                ${ROOT_UTILS}/memleak.cc)
-target_link_libraries(btree_kv_test ${LIBM} ${MALLOC_LIBRARIES})
+target_link_libraries(btree_kv_test ${PTHREAD_LIB} ${LIBM} ${MALLOC_LIBRARIES})
 
 # add test target
 add_test(hash_test hash_test)
