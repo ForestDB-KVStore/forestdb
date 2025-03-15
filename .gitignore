@@ -23,3 +23,4 @@ wt2
 CMakeUserPresets.json
 compile_commands.json
 .cache/
+.build_success*
