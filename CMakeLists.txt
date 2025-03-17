@@ -297,14 +297,12 @@ target_link_libraries(forestdb_hexamine ${PTHREAD_LIB} ${LIBM} ${SNAPPY_LIBRARIE
     ${DL_LIBRARIES} ${BREAKPAD_LIBRARIES})
 set_target_properties(forestdb_hexamine PROPERTIES COMPILE_FLAGS "-D_FDB_TOOLS")
 
-if((NOT COUCHBASE_SERVER_BUILD) OR (INSTALL_HEADER_FILES))
-    install(FILES
-        include/libforestdb/forestdb.h
-        include/libforestdb/fdb_types.h
-        include/libforestdb/fdb_errors.h
-        ${CMAKE_CURRENT_BINARY_DIR}/src/config.h
-        DESTINATION include/libforestdb)
-endif((NOT COUCHBASE_SERVER_BUILD) OR (INSTALL_HEADER_FILES))
+install(FILES
+    include/libforestdb/forestdb.h
+    include/libforestdb/fdb_types.h
+    include/libforestdb/fdb_errors.h
+    ${CMAKE_CURRENT_BINARY_DIR}/src/config.h
+    DESTINATION include/libforestdb)
 
 install(TARGETS static_lib
     RUNTIME DESTINATION bin
@@ -315,10 +313,10 @@ install(TARGETS forestdb_dump
     RUNTIME DESTINATION bin)
 
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Coverage")
-    if((NOT COUCHBASE_SERVER_BUILD) AND (NOT WIN32))
+    if(NOT WIN32)
         include(cmake/Modules/CodeCoverage)
         SETUP_TARGET_FOR_COVERAGE(test_coverage ctest ${PROJECT_SOURCE_DIR}/coverage)
-    endif((NOT COUCHBASE_SERVER_BUILD) AND (NOT WIN32))
+    endif()
 endif()
 
 if(("${CMAKE_BUILD_TYPE}" STREQUAL "Valgrind") AND (NOT WIN32))

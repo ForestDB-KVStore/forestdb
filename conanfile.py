@@ -49,7 +49,7 @@ class ForestdbConan(ConanFile):
 
     def layout(self):
         cmake_layout(self, generator="CMakeDeps")
-        self.cpp.package.libs = [self.name]
+        self.cpp.package.libs = [f"lib{self.name}.so" if self.options.shared else f"lib{self.name}.a"]
 
         hash = Git(self).get_commit()
         self.cpp.package.defines = self.cpp.build.defines = ["_FDB_COMMIT_HASH=%s" % hash]
