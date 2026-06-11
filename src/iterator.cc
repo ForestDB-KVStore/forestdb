@@ -2067,7 +2067,9 @@ fdb_status fdb_iterator_get(fdb_iterator *iterator, fdb_doc **doc)
 
     offset = iterator->_get_offset;
 
+    bool alloced_doc;
     if (*doc == NULL) {
+        alloced_doc = true;
         ret = fdb_doc_create(doc, NULL, 0, NULL, 0, NULL, 0);
         if (ret != FDB_RESULT_SUCCESS) { // LCOV_EXCL_START
             atomic_cas_uint8_t(&iterator->handle->handle_busy, 1, 0);
@@ -2081,6 +2083,7 @@ fdb_status fdb_iterator_get(fdb_iterator *iterator, fdb_doc **doc)
         alloced_meta = true;
         alloced_body = true;
     } else {
+        alloced_doc = false;
         _doc.key = (*doc)->key;
         _doc.meta = (*doc)->meta;
         _doc.body = (*doc)->body;
@@ -2092,8 +2095,15 @@ fdb_status fdb_iterator_get(fdb_iterator *iterator, fdb_doc **doc)
     int64_t _offset = docio_read_doc(dhandle, offset, &_doc, true);
     if (_offset <= 0) {
         atomic_cas_uint8_t(&iterator->handle->handle_busy, 1, 0);
-        fdb_doc_free(*doc);
-        *doc = NULL;
+        if (alloced_doc) {
+            fdb_doc_free(*doc);
+            *doc = NULL;
+        } else {
+            // Caller owns the struct; only free fields we allocated.
+            if (alloced_key) free(_doc.key);
+            if (alloced_meta) free(_doc.meta);
+            if (alloced_body) free(_doc.body);
+        }
         return _offset < 0 ? (fdb_status) _offset : FDB_RESULT_KEY_NOT_FOUND;
     }
     if (_doc.length.flag & DOCIO_DELETED &&
@@ -2172,7 +2182,9 @@ fdb_status fdb_iterator_get_metaonly(fdb_iterator *iterator, fdb_doc **doc)
 
     offset = iterator->_get_offset;
 
+    bool alloced_doc;
     if (*doc == NULL) {
+        alloced_doc = true;
         ret = fdb_doc_create(doc, NULL, 0, NULL, 0, NULL, 0);
         if (ret != FDB_RESULT_SUCCESS) { // LCOV_EXCL_START
             atomic_cas_uint8_t(&iterator->handle->handle_busy, 1, 0);
@@ -2185,6 +2197,7 @@ fdb_status fdb_iterator_get_metaonly(fdb_iterator *iterator, fdb_doc **doc)
         alloced_key = true;
         alloced_meta = true;
     } else {
+        alloced_doc = false;
         _doc.key = (*doc)->key;
         _doc.meta = (*doc)->meta;
         _doc.body = NULL;
@@ -2195,8 +2208,13 @@ fdb_status fdb_iterator_get_metaonly(fdb_iterator *iterator, fdb_doc **doc)
     _offset = docio_read_doc_key_meta(dhandle, offset, &_doc, true);
     if (_offset <= 0) {
         atomic_cas_uint8_t(&iterator->handle->handle_busy, 1, 0);
-        fdb_doc_free(*doc);
-        *doc = NULL;
+        if (alloced_doc) {
+            fdb_doc_free(*doc);
+            *doc = NULL;
+        } else {
+            if (alloced_key) free(_doc.key);
+            if (alloced_meta) free(_doc.meta);
+        }
         return _offset < 0 ? (fdb_status)_offset : FDB_RESULT_KEY_NOT_FOUND;
     }
     if (_doc.length.flag & DOCIO_DELETED &&
